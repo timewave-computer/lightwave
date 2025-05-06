@@ -30,8 +30,8 @@ impl Preprocessor {
         println!("Period distance: {}", period_distance);
         if period_distance == 0 {
             period_distance = 1;
+            println!("Period distance is 0, defaulting to 1");
         }
-        println!("Period distance is 0, defaulting to 1");
         let updates = get_updates(&client, period_distance as u8).await;
         let finality_update = client.rpc.get_finality_update().await.unwrap();
         // Create program inputs

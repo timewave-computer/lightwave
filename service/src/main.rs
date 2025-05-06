@@ -1,5 +1,5 @@
 use core::fmt;
-use std::fmt::Debug;
+use std::{fmt::Debug, time::Instant};
 
 use alloy::dyn_abi::SolType;
 use anyhow::{Context, Result};
@@ -35,6 +35,7 @@ impl Debug for ServiceState {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let start_time = Instant::now();
     let mut service_state = ServiceState {
         genesis_committee_hash: None,
         most_recent_proof: None,
@@ -85,6 +86,8 @@ async fn main() -> Result<()> {
             HeliosOutputs::abi_decode(&proof.public_values.to_vec(), false).unwrap();
         service_state.trusted_slot = helios_output.newHead.try_into().unwrap();
         println!("New Service State: {:?} \n", service_state);
+        let elapsed_time = start_time.elapsed();
+        println!("Alive for: {:?}", elapsed_time);
         iterations += 1;
     }
 }
