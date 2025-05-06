@@ -1,0 +1,70 @@
+use anyhow::{Context, Result};
+use helios_ethereum::rpc::ConsensusRpc;
+use helios_operator::{get_checkpoint, get_client, get_updates};
+use serde_json::Value;
+use sp1_helios_primitives::types::ProofInputs;
+use std::env;
+
+pub type HeliosInputSlice = Vec<u8>;
+
+pub struct Preprocessor {
+    pub trusted_slot: u64,
+}
+
+impl Preprocessor {
+    pub fn new(trusted_slot: u64) -> Self {
+        Self { trusted_slot }
+    }
+    pub async fn run(&self) -> Result<HeliosInputSlice> {
+        let checkpoint = get_checkpoint(self.trusted_slot).await?;
+        let client = get_client(checkpoint).await?;
+        let trusted_slot_period = &self.trusted_slot / 8192;
+        let latest_finalized_slot = get_latest_finalized_slot().await?;
+        if latest_finalized_slot <= self.trusted_slot {
+            return Err(anyhow::anyhow!(
+                "Waiting for new slot to be finalized, retry in 60 seconds!"
+            ));
+        }
+        let latest_finalized_slot_period = latest_finalized_slot / 8192;
+        let mut period_distance = latest_finalized_slot_period - trusted_slot_period;
+        println!("Period distance: {}", period_distance);
+        if period_distance == 0 {
+            period_distance = 1;
+        }
+        println!("Period distance is 0, defaulting to 1");
+        let updates = get_updates(&client, period_distance as u8).await;
+        let finality_update = client.rpc.get_finality_update().await.unwrap();
+        // Create program inputs
+        let expected_current_slot = client.expected_current_slot();
+        let inputs = ProofInputs {
+            updates,
+            finality_update,
+            expected_current_slot,
+            store: client.store.clone(),
+            genesis_root: client.config.chain.genesis_root,
+            forks: client.config.forks.clone(),
+        };
+        serde_cbor::to_vec(&inputs).context("Failed to serialize proof inputs")
+    }
+}
+
+pub async fn get_latest_finalized_slot() -> Result<u64> {
+    let consensus_url = env::var("SOURCE_CONSENSUS_RPC_URL")?;
+    let resp: Value = reqwest::get(format!("{}/eth/v1/beacon/headers/finalized", consensus_url))
+        .await?
+        .json()
+        .await?;
+
+    let slot_str = resp["data"]["header"]["message"]["slot"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing or invalid slot field"))?;
+
+    let slot = slot_str.parse::<u64>()?;
+    Ok(slot)
+}
+
+#[tokio::test]
+async fn test_print_latest_finalized_slot() {
+    let slot = get_latest_finalized_slot().await.unwrap();
+    println!("Latest finalized slot: {}", slot);
+}
