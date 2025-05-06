@@ -10,9 +10,7 @@ cargo run --bin service --release -- --nocapture
 
 Example output:
 
-New Service State: ServiceState { genesis_committee_hash: Some("04dea69eb81ecfc6d4c9268d97df4b64cff46decd0eabd005a132b720189117f"), most_recent_proof_outputs: Some("ProofOutputs { prevHeader: 0xb048fc6b159cf756a65e5356b412c1047aa69dc998f3a690c7a5ff23f27033ad, prevHead: 7553088, prevSyncCommitteeHash: 0x04dea69eb81ecfc6d4c9268d97df4b64cff46decd0eabd005a132b720189117f, newHead: 7568768, newHeader: 0xc89fe31e215d42b57dd5898e728f3c63f242c004a4136ba9a587eb565c7d22ce, executionStateRoot: 0x2798737fe5de093b65cacf89088a1ab238ec29402b28e2c00621852c571786f4, syncCommitteeHash: 0x5ec9766f1473b7f36119d46895ca82e8e7c3752aaf84414439b3a3e3fc5bf9c0, nextSyncCommitteeHash: 0xb784d3f228e9a40c08e991ae0b924c8350e098f7526cab2e76f52f78c16e3f9e }"), trusted_slot: 7568768 }
-
-```json
+```
 Period distance: 1
 New Service State: ServiceState { genesis_committee_hash: Some("04dea69eb81ecfc6d4c9268d97df4b64cff46decd0eabd005a132b720189117f"), most_recent_proof_outputs: Some("ProofOutputs { prevHeader: 0x4fa350fa61823a1b1b752c325220b1fabcf2a9c27da48032614c756a3b486c53, prevHead: 7560896, prevSyncCommitteeHash: 0x04dea69eb81ecfc6d4c9268d97df4b64cff46decd0eabd005a132b720189117f, newHead: 7568640, newHeader: 0xfbdf0a5e20f5e9359436cffae146423f93ccc089a33138b327db2ce66919b1ea, executionStateRoot: 0xa6771daabc69d0dc2530e18ec0dabfcfeb32db957c427ff5ca7e441dbe05aee9, syncCommitteeHash: 0x5ec9766f1473b7f36119d46895ca82e8e7c3752aaf84414439b3a3e3fc5bf9c0, nextSyncCommitteeHash: 0x0000000000000000000000000000000000000000000000000000000000000000 }"), trusted_slot: 7568640 } 
 
