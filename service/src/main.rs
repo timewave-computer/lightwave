@@ -86,8 +86,5 @@ async fn main() -> Result<()> {
         service_state.trusted_slot = helios_output.newHead.try_into().unwrap();
         println!("New Service State: {:?} \n", service_state);
         iterations += 1;
-        if iterations >= 3 {
-            return Ok(());
-        }
     }
 }
