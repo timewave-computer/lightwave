@@ -5,8 +5,11 @@ use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_verifier::Groth16Verifier;
 
-const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [0; 32];
-const TRUSTED_HEAD: u64 = 7561216 - (32 * 254);
+const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
+    4, 222, 166, 158, 184, 30, 207, 198, 212, 201, 38, 141, 151, 223, 75, 100, 207, 244, 109, 236,
+    208, 234, 189, 0, 90, 19, 43, 114, 1, 137, 17, 127,
+];
+const TRUSTED_HEAD: u64 = 7553088;
 
 pub fn main() {
     let inputs: RecursionCircuitInputs =
