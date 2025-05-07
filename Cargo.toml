@@ -1,5 +1,5 @@
 [workspace]
-members = ["recursion", "service"]
+members = ["recursion/circuit", "recursion/recursion-types", "service"]
 resolver = "2"
 
 
@@ -17,7 +17,7 @@ sp1-helios-primitives = { package = "sp1-helios-primitives", git = "https://gith
 tokio = { version = "1.41.1", features = ["full"] }
 alloy = { version = "0.12.5", features = ["full"] }
 alloy-primitives = { version = "0.8.25", features = ["rlp"] }
-alloy-sol-types = "0.7"
+alloy-sol-types = "0.8.15"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11.2"
 dotenvy = "0.15.7"
@@ -32,6 +32,9 @@ sp1-sdk = { git = "https://github.com/timewave-computer/sp1", branch = "jonas/fi
 ] }
 # not a custom branch, just a small deps fix for the release tag 4.1.7
 sp1-verifier = { git = "https://github.com/timewave-computer/sp1", branch = "jonas/fix-4.1.7-syscall" }
+borsh = { version = "1.5.5", features = ["derive"] }
+
+recursion-types = { path = "recursion/recursion-types" }
 
 [patch.crates-io]
 bls12_381 = { git = "https://github.com/sp1-patches/bls12_381", tag = "patch-0.8.0-sp1-4.0.0" }
