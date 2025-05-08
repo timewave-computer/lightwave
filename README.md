@@ -1,6 +1,8 @@
 # SP1-Helios ZK Light-Client operator for Valence
 This repository contains a ZK prover that generates and submits SP1-Helios light client proofs
-to our coprocessor.
+to our coprocessor. The service maintains a chain of proofs that verify the execution state
+of the Ethereum network, committing both the execution block height and state root for each
+verified block.
 
 To start the service:
 
@@ -144,6 +146,7 @@ The service is the main orchestrator that:
 - In the first round, verifies only the proof at the trusted height
 - In subsequent rounds, verifies both the current Helios proof and the previous recursive proof
 - Updates its state with each new recursive proof
+- Commits execution block height and state root for each verified block
 
 ## Recursion
 The recursion component contains the circuit code that:
@@ -151,3 +154,4 @@ The recursion component contains the circuit code that:
 - Implements the recursive verification logic
 - Ensures the chain of proofs is valid and connected
 - Maintains the security properties of the light client protocol
+- Verifies the execution state root and block height for each block

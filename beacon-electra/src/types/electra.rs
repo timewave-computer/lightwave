@@ -51,29 +51,29 @@ pub struct ElectraBlockBodyPayloadRoots {
     pub receipts_root: [u8; 32],
     /// Root of the logs bloom
     pub logs_bloom: [u8; 32],
-    /// Root of the previous RANDAO
+    /// Padded difficulty leaf
     pub prev_randao: [u8; 32],
-    /// Root of the block number
+    /// Padded block number leaf
     pub block_number: [u8; 32],
-    /// Root of the gas limit
+    /// Padded gas limit leaf
     pub gas_limit: [u8; 32],
-    /// Root of the gas used
+    /// Padded gas used leaf
     pub gas_used: [u8; 32],
-    /// Root of the timestamp
+    /// Padded timestamp leaf
     pub timestamp: [u8; 32],
-    /// Root of the extra data
+    /// Padded extra data leaf
     pub extra_data: [u8; 32],
-    /// Root of the base fee per gas
+    /// Padded base fee per gas leaf
     pub base_fee_per_gas: [u8; 32],
-    /// Root of the block hash
+    /// Hash of the block
     pub block_hash: [u8; 32],
-    /// Root of the transactions
+    /// Root of the transactions tree
     pub transactions: [u8; 32],
-    /// Root of the withdrawals
+    /// Root of the withdrawals tree
     pub withdrawals: [u8; 32],
-    /// Root of the blob gas used
+    /// Padded blob gas used leaf
     pub blob_gas_used: [u8; 32],
-    /// Root of the excess blob gas
+    /// Padded excess blob gas leaf
     pub excess_blob_gas: [u8; 32],
 }
 

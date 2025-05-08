@@ -5,16 +5,36 @@ use serde_json::Value;
 use sp1_helios_primitives::types::ProofInputs;
 use std::env;
 
+/// Type alias for the serialized Helios program inputs
 pub type HeliosInputSlice = Vec<u8>;
 
+/// Preprocessor responsible for preparing inputs for the Helios light client program.
+///
+/// The preprocessor:
+/// 1. Takes a trusted slot as input
+/// 2. Fetches the latest finalized slot from the consensus layer
+/// 3. Calculates the period distance between slots
+/// 4. Gathers necessary updates and finality data
+/// 5. Serializes all inputs for the Helios program
 pub struct Preprocessor {
+    /// The trusted slot to use as a reference point
     pub trusted_slot: u64,
 }
 
 impl Preprocessor {
+    /// Creates a new Preprocessor instance with the given trusted slot
     pub fn new(trusted_slot: u64) -> Self {
         Self { trusted_slot }
     }
+
+    /// Runs the preprocessing pipeline to generate inputs for the Helios program.
+    ///
+    /// This function:
+    /// 1. Gets the checkpoint for the trusted slot
+    /// 2. Initializes the Helios client
+    /// 3. Calculates period distances
+    /// 4. Fetches updates and finality data
+    /// 5. Serializes everything into the format expected by the Helios program
     pub async fn run(&self) -> Result<HeliosInputSlice> {
         let checkpoint = get_checkpoint(self.trusted_slot).await?;
         let client = get_client(checkpoint).await?;
@@ -48,6 +68,10 @@ impl Preprocessor {
     }
 }
 
+/// Fetches the latest finalized slot from the consensus layer.
+///
+/// This function makes an RPC call to the consensus client to get
+/// the most recently finalized slot number.
 pub async fn get_latest_finalized_slot() -> Result<u64> {
     let consensus_url = env::var("SOURCE_CONSENSUS_RPC_URL")?;
     let resp: Value = reqwest::get(format!("{}/eth/v1/beacon/headers/finalized", consensus_url))
@@ -63,6 +87,9 @@ pub async fn get_latest_finalized_slot() -> Result<u64> {
     Ok(slot)
 }
 
+/// Test function to print the latest finalized slot.
+///
+/// This is used for debugging and testing purposes.
 #[tokio::test]
 async fn test_print_latest_finalized_slot() {
     let slot = get_latest_finalized_slot().await.unwrap();
