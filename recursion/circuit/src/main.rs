@@ -17,6 +17,7 @@ const TRUSTED_HEAD: u64 = 7574720;
 pub fn main() {
     let inputs: RecursionCircuitInputs =
         borsh::from_slice(&sp1_zkvm::io::read_vec()).expect("Failed to deserialize Inputs");
+
     let groth16_vk: &[u8] = *sp1_verifier::GROTH16_VK_BYTES;
     let electra_block_header_root = merkleize_header(inputs.electra_header.clone());
     let electra_body_root = inputs.electra_body_roots.merkelize();
@@ -40,6 +41,7 @@ pub fn main() {
             helios_output.prevSyncCommitteeHash.to_vec(),
             TRUSTED_SYNC_COMMITTEE_HASH
         );
+
         // verify the helios proof
         Groth16Verifier::verify(
             &inputs.helios_proof,
@@ -48,10 +50,12 @@ pub fn main() {
             groth16_vk,
         )
         .expect("Failed to verify helios zk light client update");
+
         let outputs = RecursionCircuitOutputs {
             root: state_root.to_vec(),
             height: unpad_block_number(&height),
         };
+
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
     } else {
         // verify the previous proof
@@ -67,6 +71,7 @@ pub fn main() {
             groth16_vk,
         )
         .expect("Failed to verify previous proof");
+
         // verify the helios proof
         Groth16Verifier::verify(
             &inputs.helios_proof,
@@ -76,10 +81,12 @@ pub fn main() {
             groth16_vk,
         )
         .expect("Failed to verify helios zk light client update");
+
         let outputs = RecursionCircuitOutputs {
             root: state_root.to_vec(),
             height: unpad_block_number(&height),
         };
+
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
     }
 }

@@ -84,6 +84,7 @@ async fn main() -> Result<()> {
         let (recursive_pk, recursive_vk) = client.setup(RECURSIVE_ELF);
         let mut stdin = SP1Stdin::new();
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
+
         let inputs = match preprocessor.run().await {
             Ok(inputs) => inputs,
             Err(e) => {
@@ -92,6 +93,9 @@ async fn main() -> Result<()> {
                 continue;
             }
         };
+
+        stdin.write_slice(&inputs);
+
         // if this is the first proof, we want to store the active committee as our genesis committee
         if service_state.update_counter == 0 {
             let helios_inputs: HeliosInputs = serde_cbor::from_slice(&inputs)?;
@@ -118,7 +122,7 @@ async fn main() -> Result<()> {
             //////////////////////////////////////////////////////////////
             //////////////////////////////////////////////////////////////
         }
-        stdin.write_slice(&inputs);
+
         let proof = match client
             .prove(&helios_pk, &stdin)
             .groth16()
@@ -157,11 +161,6 @@ async fn main() -> Result<()> {
             body_root: beacon_header.body_root.to_vec().try_into().unwrap(),
         };
 
-        println!(
-            "Electra Block Height: {:?}",
-            electra_body_roots.payload_roots.block_number
-        );
-
         // generate the recursive proof
         if service_state.update_counter == 0 {
             let recursion_inputs = RecursionCircuitInputs {
@@ -175,16 +174,21 @@ async fn main() -> Result<()> {
                 previous_public_values: None,
                 previous_vk: None,
             };
+
             let mut stdin = SP1Stdin::new();
             stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
+
             let recursive_proof = client
                 .prove(&recursive_pk, &stdin)
                 .groth16()
                 .run()
                 .context("Failed to prove")?;
+
             service_state.most_recent_proof = Some(recursive_proof.clone());
+
             let recursive_outputs: RecursionCircuitOutputs =
                 borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
+
             service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
             service_state.trusted_height = recursive_outputs.height;
             service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
@@ -192,6 +196,7 @@ async fn main() -> Result<()> {
             let previous_proof = service_state
                 .most_recent_proof
                 .expect("Missing previous proof in state");
+
             let recursion_inputs = RecursionCircuitInputs {
                 electra_body_roots,
                 electra_header,
@@ -203,6 +208,7 @@ async fn main() -> Result<()> {
                 previous_public_values: Some(previous_proof.public_values.to_vec()),
                 previous_vk: Some(recursive_vk.bytes32()),
             };
+
             let mut stdin = SP1Stdin::new();
             stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
             let recursive_proof = client
@@ -210,8 +216,10 @@ async fn main() -> Result<()> {
                 .groth16()
                 .run()
                 .context("Failed to prove")?;
+
             let recursive_outputs: RecursionCircuitOutputs =
                 borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
+
             service_state.most_recent_proof = Some(recursive_proof.clone());
             service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
             service_state.trusted_height = recursive_outputs.height;
