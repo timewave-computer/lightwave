@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 borsh.workspace = true
+beacon-electra.workspace = true

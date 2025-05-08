@@ -116,8 +116,6 @@ New Service State: ServiceState { genesis_committee_hash: Some("04dea69eb81ecfc6
 Alive for: 41391.867946583s
 Period distance: 0
 Period distance is 0, defaulting to 1
-```
-
 
 # Technicalities (low-level)
 
@@ -125,3 +123,31 @@ Period distance is 0, defaulting to 1
 Every 32 slots an epoch ends. A new period (=sync committee rotation) happens every 256 epochs (=8192) slots.
 In order to compute the next ZK Light-Client update we must calculate the period diff from the new head to our
 trusted beacon block.
+
+# System Architecture
+
+The system consists of three main components that work together to provide ZK light client proofs:
+
+## Preprocessor
+The preprocessor is responsible for preparing the serialized circuit inputs for the Helios program. It:
+- Takes a trusted slot as input
+- Fetches the latest finalized slot from the consensus layer
+- Calculates the period distance between slots
+- Gathers necessary updates and finality data
+- Serializes all inputs for the Helios program
+
+## Service
+The service is the main orchestrator that:
+- Calls the Helios prover to generate proofs
+- Implements recursive proof verification
+- Maintains state of the most recent recursive proof
+- In the first round, verifies only the proof at the trusted height
+- In subsequent rounds, verifies both the current Helios proof and the previous recursive proof
+- Updates its state with each new recursive proof
+
+## Recursion
+The recursion component contains the circuit code that:
+- Verifies Helios proofs
+- Implements the recursive verification logic
+- Ensures the chain of proofs is valid and connected
+- Maintains the security properties of the light client protocol

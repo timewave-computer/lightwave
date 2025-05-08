@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+beacon-electra = { workspace = true, features = ["no-zkvm"] }
 helios-operator.workspace = true
 helios-ethereum.workspace = true
 helios-consensus-core.workspace = true

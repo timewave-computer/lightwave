@@ -1,10 +1,15 @@
 use core::fmt;
 use std::{fmt::Debug, time::Instant};
 
-use alloy_sol_types::SolValue;
+use alloy_sol_types::SolType;
 use anyhow::{Context, Result};
+use beacon_electra::{
+    extract_electra_block_body, get_beacon_block_header, get_electra_block,
+    types::electra::ElectraBlockHeader,
+};
 use preprocessor::Preprocessor;
 use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
+mod helpers;
 use sp1_helios_primitives::types::{ProofInputs as HeliosInputs, ProofOutputs as HeliosOutputs};
 use sp1_sdk::{HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, include_elf};
 mod preprocessor;
@@ -19,10 +24,12 @@ pub struct ServiceState {
     pub most_recent_proof: Option<SP1ProofWithPublicValues>,
     // the last trusted slot from our recursive proof outputs
     pub trusted_slot: u64,
+    // the last trusted execution block height
+    pub trusted_height: u64,
     // the current root
-    pub current_root: [u8; 32],
+    pub trusted_root: [u8; 32],
     // increases with every recursive proof
-    pub height: u64,
+    pub update_counter: u64,
 }
 
 impl Debug for ServiceState {
@@ -38,8 +45,8 @@ impl Debug for ServiceState {
                 }),
             )
             .field("trusted_slot", &self.trusted_slot)
-            .field("current_root", &hex::encode(self.current_root))
-            .field("height", &self.height)
+            .field("trusted_root", &hex::encode(self.trusted_root))
+            .field("counter", &self.update_counter)
             .finish()
     }
 }
@@ -50,11 +57,13 @@ async fn main() -> Result<()> {
     let mut service_state = ServiceState {
         genesis_committee_hash: None,
         most_recent_proof: None,
-        trusted_slot: 7553088,
-        current_root: [0; 32],
-        height: 0,
+        trusted_slot: 7574720,
+        trusted_height: 8275891,
+        trusted_root: [0; 32],
+        update_counter: 0,
     };
     dotenvy::dotenv().ok();
+    let consensus_url = std::env::var("SOURCE_CONSENSUS_RPC_URL").unwrap_or_default();
     let client = ProverClient::from_env();
     loop {
         let (helios_pk, helios_vk) = client.setup(HELIOS_ELF);
@@ -70,7 +79,7 @@ async fn main() -> Result<()> {
             }
         };
         // if this is the first proof, we want to store the active committee as our genesis committee
-        if service_state.height == 0 {
+        if service_state.update_counter == 0 {
             let helios_inputs: HeliosInputs = serde_cbor::from_slice(&inputs)?;
             service_state.genesis_committee_hash = Some(hex::encode(
                 helios_inputs
@@ -80,6 +89,16 @@ async fn main() -> Result<()> {
                     .tree_hash_root()
                     .to_vec(),
             ));
+            // optional when initializing the circuit
+            /*println!(
+                "Genesis Committee Hash Bytes: {:?}",
+                helios_inputs
+                    .store
+                    .current_sync_committee
+                    .clone()
+                    .tree_hash_root()
+                    .to_vec(),
+            );*/
         }
         stdin.write_slice(&inputs);
         let proof = match client
@@ -94,9 +113,38 @@ async fn main() -> Result<()> {
                 continue;
             }
         };
+
+        let helios_outputs: HeliosOutputs =
+            HeliosOutputs::abi_decode(&proof.public_values.to_vec(), false).unwrap();
+
+        let electra_block =
+            get_electra_block(helios_outputs.newHead.try_into()?, &consensus_url).await;
+
+        // Extract the body roots from the Electra block
+        let electra_body_roots = extract_electra_block_body(electra_block);
+
+        // Get the header from the Electra block
+        let beacon_header =
+            get_beacon_block_header(helios_outputs.newHead.try_into()?, &consensus_url).await;
+
+        let electra_header = ElectraBlockHeader {
+            slot: beacon_header.slot.as_u64(),
+            proposer_index: beacon_header.proposer_index,
+            parent_root: beacon_header.parent_root.to_vec().try_into().unwrap(),
+            state_root: beacon_header.state_root.to_vec().try_into().unwrap(),
+            body_root: beacon_header.body_root.to_vec().try_into().unwrap(),
+        };
+
+        println!(
+            "Electra Block Height: {:?}",
+            electra_body_roots.payload_roots.block_number
+        );
+
         // generate the recursive proof
-        if service_state.height == 0 {
+        if service_state.update_counter == 0 {
             let recursion_inputs = RecursionCircuitInputs {
+                electra_body_roots,
+                electra_header,
                 helios_proof: proof.bytes(),
                 helios_public_values: proof.public_values.to_vec(),
                 helios_vk: helios_vk.bytes32(),
@@ -115,13 +163,16 @@ async fn main() -> Result<()> {
             service_state.most_recent_proof = Some(recursive_proof.clone());
             let recursive_outputs: RecursionCircuitOutputs =
                 borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
-            service_state.trusted_slot = recursive_outputs.slot;
-            service_state.current_root = recursive_outputs.root.try_into().unwrap();
+            service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
+            service_state.trusted_height = recursive_outputs.height;
+            service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
         } else {
             let previous_proof = service_state
                 .most_recent_proof
                 .expect("Missing previous proof in state");
             let recursion_inputs = RecursionCircuitInputs {
+                electra_body_roots,
+                electra_header,
                 helios_proof: proof.bytes(),
                 helios_public_values: proof.public_values.to_vec(),
                 helios_vk: helios_vk.bytes32(),
@@ -140,12 +191,13 @@ async fn main() -> Result<()> {
             let recursive_outputs: RecursionCircuitOutputs =
                 borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
             service_state.most_recent_proof = Some(recursive_proof.clone());
-            service_state.trusted_slot = recursive_outputs.slot;
-            service_state.current_root = recursive_outputs.root.try_into().unwrap();
+            service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
+            service_state.trusted_height = recursive_outputs.height;
+            service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
         }
         println!("New Service State: {:?} \n", service_state);
         let elapsed_time = start_time.elapsed();
         println!("Alive for: {:?}", elapsed_time);
-        service_state.height += 1;
+        service_state.update_counter += 1;
     }
 }
