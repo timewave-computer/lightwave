@@ -6,10 +6,12 @@ use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_verifier::Groth16Verifier;
 
+// must be initialized correctly
 const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
     183, 132, 211, 242, 40, 233, 164, 12, 8, 233, 145, 174, 11, 146, 76, 131, 80, 224, 152, 247,
     82, 108, 171, 46, 118, 245, 47, 120, 193, 110, 63, 158,
 ];
+// must be initialized correctly to the trusted slot
 const TRUSTED_HEAD: u64 = 7574720;
 
 pub fn main() {
@@ -82,6 +84,7 @@ pub fn main() {
     }
 }
 
+// helper tounpad the block number leaf from the execution payload
 fn unpad_block_number(padded: &[u8; 32]) -> u64 {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&padded[..8]); // SSZ uses little-endian for uint64

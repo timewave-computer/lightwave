@@ -57,8 +57,10 @@ async fn main() -> Result<()> {
     let mut service_state = ServiceState {
         genesis_committee_hash: None,
         most_recent_proof: None,
-        trusted_slot: 7574720,
-        trusted_height: 8275891,
+        // must be initialized correctly
+        trusted_slot: 7580896,
+        // can be initialized correctly, but doesn't have to be.
+        trusted_height: 0,
         trusted_root: [0; 32],
         update_counter: 0,
     };
@@ -89,9 +91,11 @@ async fn main() -> Result<()> {
                     .tree_hash_root()
                     .to_vec(),
             ));
+            //////////////////////////////////////////////////////////////
+            //////////////////////////////////////////////////////////////
             // optional when initializing the circuit
             /*println!(
-                "Genesis Committee Hash Bytes: {:?}",
+                "Genesis Committee Hash Bytes, please copy into the circuit: {:?}",
                 helios_inputs
                     .store
                     .current_sync_committee
@@ -99,6 +103,8 @@ async fn main() -> Result<()> {
                     .tree_hash_root()
                     .to_vec(),
             );*/
+            //////////////////////////////////////////////////////////////
+            //////////////////////////////////////////////////////////////
         }
         stdin.write_slice(&inputs);
         let proof = match client

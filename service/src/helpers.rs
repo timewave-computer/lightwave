@@ -14,3 +14,13 @@ pub async fn get_execution_block_height_from_slot(
     let block_number = block_number.parse::<u64>()?;
     Ok(block_number)
 }
+
+#[tokio::test]
+async fn test_get_execution_block_height_from_slot() {
+    dotenvy::dotenv().ok();
+    let consensus_url = std::env::var("SOURCE_CONSENSUS_RPC_URL").unwrap_or_default();
+    let height = get_execution_block_height_from_slot(&consensus_url, 7578079 - (32 * 10))
+        .await
+        .unwrap();
+    println!("Height: {:?}", height);
+}
