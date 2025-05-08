@@ -36,20 +36,21 @@ pub fn main() {
         helios_output.newHeader.to_vec()
     );
 
+    // verify the helios proof
+    Groth16Verifier::verify(
+        &inputs.helios_proof,
+        &inputs.helios_public_values,
+        // todo: hardcode this verifying key (must be the Helios VK)
+        &inputs.helios_vk,
+        groth16_vk,
+    )
+    .expect("Failed to verify helios zk light client update");
+
     if inputs.previous_head == TRUSTED_HEAD {
         assert_eq!(
             helios_output.prevSyncCommitteeHash.to_vec(),
             TRUSTED_SYNC_COMMITTEE_HASH
         );
-
-        // verify the helios proof
-        Groth16Verifier::verify(
-            &inputs.helios_proof,
-            &inputs.helios_public_values,
-            &inputs.helios_vk,
-            groth16_vk,
-        )
-        .expect("Failed to verify helios zk light client update");
 
         let outputs = RecursionCircuitOutputs {
             root: state_root.to_vec(),
@@ -59,7 +60,9 @@ pub fn main() {
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
     } else {
         // verify the previous proof
-        Groth16Verifier::verify(
+
+        // move this code into a wrapper cicuit because we can't derive the elf inside the same circuit
+        /*Groth16Verifier::verify(
             &inputs
                 .previous_proof
                 .expect("Previous proof is not provided"),
@@ -70,17 +73,7 @@ pub fn main() {
             &inputs.previous_vk.expect("Previous proof is not provided"),
             groth16_vk,
         )
-        .expect("Failed to verify previous proof");
-
-        // verify the helios proof
-        Groth16Verifier::verify(
-            &inputs.helios_proof,
-            &inputs.helios_public_values,
-            // todo: hardcode this verifying key (must be the Helios VK)
-            &inputs.helios_vk,
-            groth16_vk,
-        )
-        .expect("Failed to verify helios zk light client update");
+        .expect("Failed to verify previous proof");*/
 
         let outputs = RecursionCircuitOutputs {
             root: state_root.to_vec(),
