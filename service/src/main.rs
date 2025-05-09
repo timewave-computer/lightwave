@@ -1,3 +1,7 @@
+// This is the main service that orchestrates the light client update process.
+// It manages the state of the light client, generates and verifies proofs,
+// and maintains a chain of trusted state transitions.
+
 use core::fmt;
 use std::{fmt::Debug, time::Instant};
 
@@ -14,6 +18,8 @@ use sp1_helios_primitives::types::{ProofInputs as HeliosInputs, ProofOutputs as 
 use sp1_sdk::{HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, include_elf};
 mod preprocessor;
 use tree_hash::TreeHash;
+
+// Binary artifacts for the various circuits used in the light client
 pub const HELIOS_ELF: &[u8] = include_bytes!("../../elf/sp1-helios-elf");
 pub const RECURSIVE_ELF: &[u8] = include_elf!("recursion-circuit");
 pub const WRAPPER_ELF: &[u8] = include_elf!("wrapper-circuit");
@@ -67,6 +73,8 @@ impl Debug for ServiceState {
 #[tokio::main]
 async fn main() -> Result<()> {
     let start_time = Instant::now();
+
+    // Initialize the service state with trusted values
     let mut service_state = ServiceState {
         genesis_committee_hash: None,
         most_recent_proof: None,
@@ -77,15 +85,23 @@ async fn main() -> Result<()> {
         trusted_root: [0; 32],
         update_counter: 0,
     };
+
+    // Load environment variables and initialize the prover client
     dotenvy::dotenv().ok();
     let consensus_url = std::env::var("SOURCE_CONSENSUS_RPC_URL").unwrap_or_default();
     let client = ProverClient::from_env();
+
+    // Main service loop
     loop {
+        // Set up the proving keys and verification keys for all circuits
         let (helios_pk, helios_vk) = client.setup(HELIOS_ELF);
         let (recursive_pk, recursive_vk) = client.setup(RECURSIVE_ELF);
         let (wrapper_pk, wrapper_vk) = client.setup(WRAPPER_ELF);
+
+        // Initialize the preprocessor with the current trusted slot
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
 
+        // Get the next block's inputs for proof generation
         let inputs = match preprocessor.run().await {
             Ok(inputs) => inputs,
             Err(e) => {
@@ -97,7 +113,7 @@ async fn main() -> Result<()> {
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&inputs);
 
-        // if this is the first proof, we want to store the active committee as our genesis committee
+        // For the first proof, store the genesis sync committee hash
         if service_state.update_counter == 0 {
             let helios_inputs: HeliosInputs = serde_cbor::from_slice(&inputs)?;
             service_state.genesis_committee_hash = Some(hex::encode(
@@ -124,6 +140,7 @@ async fn main() -> Result<()> {
             //////////////////////////////////////////////////////////////
         }
 
+        // Generate the Helios proof
         let proof = match client
             .prove(&helios_pk, &stdin)
             .groth16()
@@ -137,23 +154,20 @@ async fn main() -> Result<()> {
             }
         };
 
+        // Decode the Helios proof outputs
         let helios_outputs: HeliosOutputs =
             HeliosOutputs::abi_decode(&proof.public_values.to_vec(), false).unwrap();
 
-        // Prepare additional circuit inputs that depend on the newHead from the Helios proof
-        // We don't know this value until after proof generation, therefore we need to fetch
-        // some additional information to verify the state root and height against the Helios beacon header
-        // and slot number
+        // Fetch additional block data needed for verification
         let electra_block =
             get_electra_block(helios_outputs.newHead.try_into()?, &consensus_url).await;
 
-        // Extract the body roots from the Electra block
+        // Extract and process block data
         let electra_body_roots = extract_electra_block_body(electra_block);
-
-        // Get the header from the Electra block
         let beacon_header =
             get_beacon_block_header(helios_outputs.newHead.try_into()?, &consensus_url).await;
 
+        // Construct the Electra block header
         let electra_header = ElectraBlockHeader {
             slot: beacon_header.slot.as_u64(),
             proposer_index: beacon_header.proposer_index,
@@ -162,7 +176,7 @@ async fn main() -> Result<()> {
             body_root: beacon_header.body_root.to_vec().try_into().unwrap(),
         };
 
-        // generate the recursive proof
+        // Get the previous proof if this isn't the first update
         let previous_proof = if service_state.update_counter == 0 {
             None
         } else {
@@ -173,6 +187,7 @@ async fn main() -> Result<()> {
             )
         };
 
+        // Prepare inputs for the recursive proof
         let recursion_inputs = RecursionCircuitInputs {
             electra_body_roots,
             electra_header,
@@ -187,6 +202,7 @@ async fn main() -> Result<()> {
             previous_wrapper_vk: previous_proof.as_ref().map(|_| wrapper_vk.bytes32()),
         };
 
+        // Generate the recursive proof
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
@@ -196,14 +212,18 @@ async fn main() -> Result<()> {
             .run()
             .context("Failed to prove")?;
 
+        // Decode the recursive proof outputs
         let recursive_outputs: RecursionCircuitOutputs =
             borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
 
+        // Prepare inputs for the wrapper proof
         let wrapper_inputs: WrapperCircuitInputs = WrapperCircuitInputs {
             recursive_proof: recursive_proof.bytes(),
             recursive_public_values: recursive_proof.public_values.to_vec(),
             recursive_vk: recursive_vk.bytes32(),
         };
+
+        // Generate the wrapper proof
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
 
@@ -213,11 +233,13 @@ async fn main() -> Result<()> {
             .run()
             .context("Failed to prove")?;
 
+        // Update the service state with new trusted information
         service_state.most_recent_proof = Some(wrapper_proof.clone());
         service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
         service_state.trusted_height = recursive_outputs.height;
         service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
 
+        // Log the updated state and elapsed time
         println!("New Service State: {:?} \n", service_state);
         let elapsed_time = start_time.elapsed();
         println!("Alive for: {:?}", elapsed_time);
