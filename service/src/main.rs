@@ -158,7 +158,7 @@ async fn main() -> Result<()> {
         let helios_outputs: HeliosOutputs =
             HeliosOutputs::abi_decode(&proof.public_values.to_vec(), false).unwrap();
 
-        // Fetch additional block data needed for verification
+        // Fetch additional block data needed for execution payload (state_root, height) verification
         let electra_block =
             get_electra_block(helios_outputs.newHead.try_into()?, &consensus_url).await;
 
@@ -167,7 +167,7 @@ async fn main() -> Result<()> {
         let beacon_header =
             get_beacon_block_header(helios_outputs.newHead.try_into()?, &consensus_url).await;
 
-        // Construct the Electra block header
+        // Construct the zk-friendly Electra block header
         let electra_header = ElectraBlockHeader {
             slot: beacon_header.slot.as_u64(),
             proposer_index: beacon_header.proposer_index,
