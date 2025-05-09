@@ -40,7 +40,9 @@ impl Preprocessor {
         let client = get_client(checkpoint).await?;
         let trusted_slot_period = &self.trusted_slot / 8192;
         let latest_finalized_slot = get_latest_finalized_slot().await?;
-        if latest_finalized_slot <= self.trusted_slot {
+        // we only get a finality update every 32 slots, so we need to wait for the
+        // latest finalized slot to be at least 32 slots ahead of the trusted slot
+        if (latest_finalized_slot / 32) * 32 <= self.trusted_slot {
             return Err(anyhow::anyhow!(
                 "Waiting for new slot to be finalized, retry in 60 seconds!"
             ));
