@@ -1,5 +1,5 @@
 [workspace]
-members = ["recursion/circuit", "recursion/recursion-types", "service"]
+members = ["recursion/circuit", "recursion/recursion-types", "recursion/wrapper-circuit", "service"]
 resolver = "2"
 
 

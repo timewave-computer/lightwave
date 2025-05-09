@@ -8,11 +8,11 @@ use sp1_verifier::Groth16Verifier;
 
 // must be initialized correctly
 const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
-    183, 132, 211, 242, 40, 233, 164, 12, 8, 233, 145, 174, 11, 146, 76, 131, 80, 224, 152, 247,
-    82, 108, 171, 46, 118, 245, 47, 120, 193, 110, 63, 158,
+    92, 237, 21, 16, 174, 107, 192, 53, 41, 51, 34, 165, 149, 128, 0, 195, 233, 139, 32, 74, 161,
+    128, 52, 111, 65, 21, 178, 227, 105, 1, 225, 233,
 ];
 // must be initialized correctly to the trusted slot
-const TRUSTED_HEAD: u64 = 7574720;
+const TRUSTED_HEAD: u64 = 7584512;
 
 pub fn main() {
     let inputs: RecursionCircuitInputs =
@@ -59,21 +59,23 @@ pub fn main() {
 
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
     } else {
-        // verify the previous proof
+        // verify the previous wrapper proof
 
         // move this code into a wrapper cicuit because we can't derive the elf inside the same circuit
-        /*Groth16Verifier::verify(
+        Groth16Verifier::verify(
             &inputs
-                .previous_proof
+                .previous_wrapper_proof
                 .expect("Previous proof is not provided"),
             &inputs
-                .previous_public_values
+                .previous_wrapper_public_values
                 .expect("Previous proof is not provided"),
-            // todo: hardcode this verifying key (must be the Recursive circuit VK)
-            &inputs.previous_vk.expect("Previous proof is not provided"),
+            // todo: hardcode this verifying key (must be the Wrapper circuit VK)
+            &inputs
+                .previous_wrapper_vk
+                .expect("Previous proof is not provided"),
             groth16_vk,
         )
-        .expect("Failed to verify previous proof");*/
+        .expect("Failed to verify previous proof");
 
         let outputs = RecursionCircuitOutputs {
             root: state_root.to_vec(),

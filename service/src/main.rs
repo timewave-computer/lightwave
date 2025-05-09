@@ -8,7 +8,7 @@ use beacon_electra::{
     types::electra::ElectraBlockHeader,
 };
 use preprocessor::Preprocessor;
-use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
+use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
 mod helpers;
 use sp1_helios_primitives::types::{ProofInputs as HeliosInputs, ProofOutputs as HeliosOutputs};
 use sp1_sdk::{HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, include_elf};
@@ -16,6 +16,7 @@ mod preprocessor;
 use tree_hash::TreeHash;
 pub const HELIOS_ELF: &[u8] = include_bytes!("../../elf/sp1-helios-elf");
 pub const RECURSIVE_ELF: &[u8] = include_elf!("recursion-circuit");
+pub const WRAPPER_ELF: &[u8] = include_elf!("wrapper-circuit");
 
 /// ServiceState maintains the state of the light client service, including
 /// the most recent proof and trusted state information.
@@ -70,7 +71,7 @@ async fn main() -> Result<()> {
         genesis_committee_hash: None,
         most_recent_proof: None,
         // must be initialized correctly
-        trusted_slot: 7580896,
+        trusted_slot: 7584512,
         // can be initialized correctly, but doesn't have to be.
         trusted_height: 0,
         trusted_root: [0; 32],
@@ -82,7 +83,7 @@ async fn main() -> Result<()> {
     loop {
         let (helios_pk, helios_vk) = client.setup(HELIOS_ELF);
         let (recursive_pk, recursive_vk) = client.setup(RECURSIVE_ELF);
-        let mut stdin = SP1Stdin::new();
+        let (wrapper_pk, wrapper_vk) = client.setup(WRAPPER_ELF);
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
 
         let inputs = match preprocessor.run().await {
@@ -93,7 +94,7 @@ async fn main() -> Result<()> {
                 continue;
             }
         };
-
+        let mut stdin = SP1Stdin::new();
         stdin.write_slice(&inputs);
 
         // if this is the first proof, we want to store the active committee as our genesis committee
@@ -162,69 +163,61 @@ async fn main() -> Result<()> {
         };
 
         // generate the recursive proof
-        if service_state.update_counter == 0 {
-            let recursion_inputs = RecursionCircuitInputs {
-                electra_body_roots,
-                electra_header,
-                helios_proof: proof.bytes(),
-                helios_public_values: proof.public_values.to_vec(),
-                helios_vk: helios_vk.bytes32(),
-                previous_head: service_state.trusted_slot,
-                previous_proof: None,
-                previous_public_values: None,
-                previous_vk: None,
-            };
-
-            let mut stdin = SP1Stdin::new();
-            stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
-
-            let recursive_proof = client
-                .prove(&recursive_pk, &stdin)
-                .groth16()
-                .run()
-                .context("Failed to prove")?;
-
-            service_state.most_recent_proof = Some(recursive_proof.clone());
-
-            let recursive_outputs: RecursionCircuitOutputs =
-                borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
-
-            service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
-            service_state.trusted_height = recursive_outputs.height;
-            service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
+        let previous_proof = if service_state.update_counter == 0 {
+            None
         } else {
-            let previous_proof = service_state
-                .most_recent_proof
-                .expect("Missing previous proof in state");
+            Some(
+                service_state
+                    .most_recent_proof
+                    .expect("Missing previous proof in state"),
+            )
+        };
 
-            let recursion_inputs = RecursionCircuitInputs {
-                electra_body_roots,
-                electra_header,
-                helios_proof: proof.bytes(),
-                helios_public_values: proof.public_values.to_vec(),
-                helios_vk: helios_vk.bytes32(),
-                previous_head: service_state.trusted_slot,
-                previous_proof: Some(previous_proof.bytes()),
-                previous_public_values: Some(previous_proof.public_values.to_vec()),
-                previous_vk: Some(recursive_vk.bytes32()),
-            };
+        let recursion_inputs = RecursionCircuitInputs {
+            electra_body_roots,
+            electra_header,
+            helios_proof: proof.bytes(),
+            helios_public_values: proof.public_values.to_vec(),
+            helios_vk: helios_vk.bytes32(),
+            previous_head: service_state.trusted_slot,
+            previous_wrapper_proof: previous_proof.as_ref().map(|p| p.bytes()),
+            previous_wrapper_public_values: previous_proof
+                .as_ref()
+                .map(|p| p.public_values.to_vec()),
+            previous_wrapper_vk: previous_proof.as_ref().map(|_| wrapper_vk.bytes32()),
+        };
 
-            let mut stdin = SP1Stdin::new();
-            stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
-            let recursive_proof = client
-                .prove(&recursive_pk, &stdin)
-                .groth16()
-                .run()
-                .context("Failed to prove")?;
+        let mut stdin = SP1Stdin::new();
+        stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
-            let recursive_outputs: RecursionCircuitOutputs =
-                borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
+        let recursive_proof = client
+            .prove(&recursive_pk, &stdin)
+            .groth16()
+            .run()
+            .context("Failed to prove")?;
 
-            service_state.most_recent_proof = Some(recursive_proof.clone());
-            service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
-            service_state.trusted_height = recursive_outputs.height;
-            service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
-        }
+        let recursive_outputs: RecursionCircuitOutputs =
+            borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
+
+        let wrapper_inputs: WrapperCircuitInputs = WrapperCircuitInputs {
+            recursive_proof: recursive_proof.bytes(),
+            recursive_public_values: recursive_proof.public_values.to_vec(),
+            recursive_vk: recursive_vk.bytes32(),
+        };
+        let mut stdin = SP1Stdin::new();
+        stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
+
+        let wrapper_proof = client
+            .prove(&wrapper_pk, &stdin)
+            .groth16()
+            .run()
+            .context("Failed to prove")?;
+
+        service_state.most_recent_proof = Some(wrapper_proof.clone());
+        service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
+        service_state.trusted_height = recursive_outputs.height;
+        service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
+
         println!("New Service State: {:?} \n", service_state);
         let elapsed_time = start_time.elapsed();
         println!("Alive for: {:?}", elapsed_time);
