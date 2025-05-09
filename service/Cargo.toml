@@ -23,7 +23,8 @@ recursion-types.workspace = true
 tree_hash = "0.9.0"
 borsh.workspace = true
 hex = "0.4"
-
 alloy-sol-types.workspace = true
+rusqlite = "=0.28.0"
+
 [build-dependencies]
 sp1-build = { git = "https://github.com/timewave-computer/sp1", branch = "jonas/fix-4.1.7-syscall" }

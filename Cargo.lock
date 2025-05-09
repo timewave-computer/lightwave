@@ -6435,6 +6435,7 @@ dependencies = [
  "hex",
  "recursion-types",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_cbor",
  "serde_json",
