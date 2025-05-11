@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
     // Load or initialize the service state
     let mut service_state = match state_manager.load_state()? {
         Some(state) => state,
-        None => state_manager.initialize_state(7584512)?,
+        None => state_manager.initialize_state(7584512 - (32 * 100))?,
     };
 
     // Main service loop
