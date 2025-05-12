@@ -49,11 +49,11 @@ impl Preprocessor {
         }
         let latest_finalized_slot_period = latest_finalized_slot / 8192;
         let mut period_distance = latest_finalized_slot_period - trusted_slot_period;
-        println!("Period distance: {}", period_distance);
+        /*println!("Period distance: {}", period_distance);
         if period_distance == 0 {
             period_distance = 1;
             println!("Period distance is 0, defaulting to 1");
-        }
+        }*/
         let updates = get_updates(&client, period_distance as u8).await;
         let finality_update = client.rpc.get_finality_update().await.unwrap();
         // Create program inputs

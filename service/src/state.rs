@@ -106,4 +106,23 @@ impl StateManager {
         self.save_state(&state)?;
         Ok(state)
     }
+
+    /// Deletes the entire state file.
+    /// Note: This will close the current connection and delete the database file.
+    /// The StateManager instance will be consumed by this operation.
+    pub fn delete_state(self) -> Result<()> {
+        // Clone the path before dropping the connection
+        let db_path = self
+            .conn
+            .path()
+            .ok_or_else(|| anyhow::anyhow!("Could not get database path"))?
+            .to_path_buf(); // <-- clone the Path
+
+        // Now we can safely drop the connection
+        drop(self.conn);
+
+        // Then delete the file
+        std::fs::remove_file(db_path)?;
+        Ok(())
+    }
 }

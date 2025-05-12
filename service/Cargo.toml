@@ -16,6 +16,7 @@ reqwest.workspace = true
 dotenvy.workspace = true
 serde_json.workspace = true
 serde_cbor.workspace = true
+clap = { version = "4.4", features = ["derive"] }
 
 sp1-sdk.workspace = true
 sp1-verifier.workspace = true

@@ -12,11 +12,11 @@ use sp1_verifier::Groth16Verifier;
 
 // The trusted sync committee hash that was active at the trusted slot.
 // This is used to verify the initial state when starting from the trusted slot.
-const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [173, 168, 203, 59, 222, 173, 180, 217, 171, 169, 172, 210, 53, 101, 102, 83, 111, 253, 20, 83, 236, 254, 182, 208, 7, 205, 227, 133, 58, 200, 38, 198];
+const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = { committee_hash };
 
 // The trusted slot number from which we start our light client chain.
 // This must be a slot where we have verified the sync committee hash.
-const TRUSTED_HEAD: u64 = 7606080;
+const TRUSTED_HEAD: u64 = { trusted_head };
 
 pub fn main() {
     // Deserialize the circuit inputs which contain the Helios proof and previous wrapper proof

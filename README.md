@@ -4,10 +4,24 @@ to our coprocessor. The service maintains a chain of proofs that verify the exec
 of the Ethereum network, committing both the execution block height and state root for each
 verified block.
 
-To start the service:
+# (Re-)Initialization
+Most ZK Light Clients (Lodestar, Nimbus, ...) don't maintain the full finality proof history for all slots.
+Because of this we have a fallback / re-initialization strategy, that we can use in case our prover goes 
+down for an extended period (25 hours +).
+
+In order to leverage the strategy, run the following sequence of commands:
 
 ```shell
-cargo run --bin service --release -- --nocapture
+cargo run --bin service --release -- --delete --generate-recursion-circuit NEW_TRUSTED_SLOT_U64
+
+cargo run --bin service --release -- --generate-wrapper-circuit
+
+cargo run --bin service --release -- --dump-elfs
+```
+
+To start the service:
+```shell
+cargo run --bin service --release
 ```
 
 # Technicalities (low-level)
