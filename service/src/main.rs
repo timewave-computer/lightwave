@@ -2,7 +2,7 @@
 // It manages the state of the light client, generates and verifies proofs,
 // and maintains a chain of trusted state transitions.
 
-use std::{fs::write, path::Path, time::Instant};
+use std::{path::Path, time::Instant};
 
 use alloy_sol_types::SolType;
 use anyhow::{Context, Result};
@@ -29,14 +29,6 @@ struct Args {
     #[arg(long)]
     delete: bool,
 
-    /// Initial slot number to start from (only used when initializing new state)
-    #[arg(long, default_missing_value = "7606080", num_args(0..=1))]
-    generate_recursion_circuit: Option<u64>,
-
-    /// Generate the wrapper circuit
-    #[arg(long)]
-    generate_wrapper_circuit: bool,
-
     /// dump the elfs as bytes
     #[arg(long)]
     dump_elfs: bool,
@@ -59,8 +51,8 @@ pub const WRAPPER_ELF_RUNTIME: &[u8] = include_elf!("wrapper-circuit");
 ///    - Commits execution block height and state root instead of beacon header
 #[tokio::main]
 async fn main() -> Result<()> {
+    let mut active_committee_hash: [u8; 32] = [0; 32];
     let start_time = Instant::now();
-
     // Parse command line arguments
     let args = Args::parse();
     // Load environment variables and initialize the prover client
@@ -80,57 +72,15 @@ async fn main() -> Result<()> {
         state_manager.delete_state()?;
         println!("State file deleted successfully");
     }
-    let state_manager = StateManager::new(Path::new(&db_path))?;
-    let initial_slot = args.generate_recursion_circuit.unwrap_or(7606080);
-    // Load or initialize the service state
+    let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
     let mut service_state = match state_manager.load_state()? {
         Some(state) => state,
-        None => state_manager.initialize_state(initial_slot)?,
+        None => state_manager.initialize_state(7606080)?,
     };
     let elfs_path = std::env::var("ELFS_OUT").unwrap_or_else(|_| "elfs/variable".to_string());
 
     let recursive_elf_path = Path::new(&elfs_path).join("recursive-elf.bin");
     let wrapper_elf_path = Path::new(&elfs_path).join("wrapper-elf.bin");
-
-    // Generate the Recursion Circuit
-    if args.generate_recursion_circuit.is_some() {
-        // Initialize the preprocessor with the current trusted slot
-        let preprocessor = Preprocessor::new(service_state.trusted_slot);
-        // Get the next block's inputs for proof generation
-        let inputs = preprocessor.run().await?;
-
-        let helios_inputs: HeliosInputs = serde_cbor::from_slice(&inputs)?;
-        let trusted_committee_hash = helios_inputs
-            .store
-            .current_sync_committee
-            .clone()
-            .tree_hash_root()
-            .to_vec();
-
-        let committee_hash_formatted = format!("{:?}", trusted_committee_hash);
-        let template = include_str!("../../recursion/circuit/src/blueprint.rs");
-
-        let generated_code = template
-            .replace("{ committee_hash }", &committee_hash_formatted)
-            .replace("{ trusted_head }", &initial_slot.to_string());
-        write("recursion/circuit/src/main.rs", generated_code)
-            .context("Failed to generate recursive circuit from blueprint")?;
-
-        println!("Recursive circuit generated successfully");
-        return Ok(());
-    }
-
-    // Generate the Wrapper Circuit
-    if args.generate_wrapper_circuit {
-        let (_, vk) = client.setup(RECURSIVE_ELF_RUNTIME);
-        let vk_bytes = vk.bytes32();
-        let template = include_str!("../../recursion/wrapper-circuit/src/blueprint.rs");
-        let generated_code = template.replace("{ recursive_vk }", &format!("\"{}\"", vk_bytes));
-        write("recursion/wrapper-circuit/src/main.rs", generated_code)
-            .context("Failed to generate wrapper circuit from blueprint")?;
-        println!("Wrapper circuit generated successfully");
-        return Ok(());
-    }
 
     // Dump the ELFs as bytes
     if args.dump_elfs {
@@ -253,19 +203,17 @@ async fn main() -> Result<()> {
             )
         };
 
-        // Prepare inputs for the recursive proof
         let recursion_inputs = RecursionCircuitInputs {
-            electra_body_roots,
-            electra_header,
+            active_committee_hash: active_committee_hash,
+            electra_body_roots: electra_body_roots,
+            electra_header: electra_header,
             helios_proof: proof.bytes(),
             helios_public_values: proof.public_values.to_vec(),
             helios_vk: helios_vk.bytes32(),
+            previous_proof: previous_proof.as_ref().map(|p| p.bytes()),
+            previous_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
+            previous_vk: previous_proof.as_ref().map(|_| wrapper_vk.bytes32()),
             previous_head: service_state.trusted_slot,
-            previous_wrapper_proof: previous_proof.as_ref().map(|p| p.bytes()),
-            previous_wrapper_public_values: previous_proof
-                .as_ref()
-                .map(|p| p.public_values.to_vec()),
-            previous_wrapper_vk: previous_proof.as_ref().map(|_| wrapper_vk.bytes32()),
         };
 
         // Generate the recursive proof
@@ -278,34 +226,28 @@ async fn main() -> Result<()> {
             .run()
             .context("Failed to prove")?;
 
+        // next_committee_hash:
+        let next_committee_hash: [u8; 32] = helios_outputs
+            .nextSyncCommitteeHash
+            .to_vec()
+            .try_into()
+            .unwrap();
+
+        // only update the active committee in the service stateif Helios committed a new one as output
+        if next_committee_hash != [0; 32] {
+            active_committee_hash = next_committee_hash.try_into().unwrap();
+        }
+
         // Decode the recursive proof outputs
         let recursive_outputs: RecursionCircuitOutputs =
             borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
 
-        // Prepare inputs for the wrapper proof
-        let wrapper_inputs: WrapperCircuitInputs = WrapperCircuitInputs {
-            recursive_proof: recursive_proof.bytes(),
-            recursive_public_values: recursive_proof.public_values.to_vec(),
-            recursive_vk: recursive_vk.bytes32(),
-        };
-
-        // Generate the wrapper proof
-        let mut stdin = SP1Stdin::new();
-        stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
-
-        let wrapper_proof = client
-            .prove(&wrapper_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")?;
-
         // Update the service state with new trusted information
-        service_state.most_recent_proof = Some(wrapper_proof.clone());
+        service_state.most_recent_proof = Some(proof.clone());
         service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
         service_state.trusted_height = recursive_outputs.height;
         service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
         service_state.update_counter += 1;
-
         // Save the updated state to the database
         state_manager.save_state(&service_state)?;
 

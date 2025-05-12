@@ -12,7 +12,10 @@ use sp1_verifier::Groth16Verifier;
 
 // The trusted sync committee hash that was active at the trusted slot.
 // This is used to verify the initial state when starting from the trusted slot.
-const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [173, 168, 203, 59, 222, 173, 180, 217, 171, 169, 172, 210, 53, 101, 102, 83, 111, 253, 20, 83, 236, 254, 182, 208, 7, 205, 227, 133, 58, 200, 38, 198];
+const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
+    173, 168, 203, 59, 222, 173, 180, 217, 171, 169, 172, 210, 53, 101, 102, 83, 111, 253, 20, 83,
+    236, 254, 182, 208, 7, 205, 227, 133, 58, 200, 38, 198,
+];
 
 // The trusted slot number from which we start our light client chain.
 // This must be a slot where we have verified the sync committee hash.
@@ -73,18 +76,28 @@ pub fn main() {
         // For subsequent proofs, verify the previous wrapper proof to ensure continuity
         Groth16Verifier::verify(
             &inputs
-                .previous_wrapper_proof
+                .previous_proof
                 .expect("Previous proof is not provided"),
             &inputs
-                .previous_wrapper_public_values
-                .expect("Previous proof is not provided"),
+                .previous_public_values
+                .expect("Previous public values is not provided"),
             // todo: hardcode this verifying key (must be the Wrapper circuit VK)
-            &inputs
-                .previous_wrapper_vk
-                .expect("Previous proof is not provided"),
+            &inputs.previous_vk.expect("Previous vk is not provided"),
             groth16_vk,
         )
         .expect("Failed to verify previous proof");
+
+        let previous_helios_output: HeliosOutputs =
+            HeliosOutputs::abi_decode(&inputs.helios_public_values, false).unwrap();
+
+        // Assert that it matches the previous committee from our service state
+        // this is a trust assumption.
+        // To elimintate this trust assumption we have to maintain the active committee
+        // on chain.
+        assert_eq!(
+            inputs.active_committee_hash,
+            previous_helios_output.prevSyncCommitteeHash
+        );
 
         // Output the state root and block height
         let outputs = RecursionCircuitOutputs {

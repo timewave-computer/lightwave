@@ -2,14 +2,15 @@ use beacon_electra::types::electra::{ElectraBlockBodyRoots, ElectraBlockHeader};
 use borsh::{BorshDeserialize, BorshSerialize};
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct RecursionCircuitInputs {
+    pub active_committee_hash: [u8; 32],
     pub electra_body_roots: ElectraBlockBodyRoots,
     pub electra_header: ElectraBlockHeader,
     pub helios_proof: Vec<u8>,
     pub helios_public_values: Vec<u8>,
     pub helios_vk: String,
-    pub previous_wrapper_proof: Option<Vec<u8>>,
-    pub previous_wrapper_public_values: Option<Vec<u8>>,
-    pub previous_wrapper_vk: Option<String>,
+    pub previous_proof: Option<Vec<u8>>,
+    pub previous_public_values: Option<Vec<u8>>,
+    pub previous_vk: Option<String>,
     pub previous_head: u64,
 }
 
