@@ -12,7 +12,7 @@ use beacon_electra::{
 };
 use clap::Parser;
 use preprocessor::Preprocessor;
-use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
+use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
 mod helpers;
 use sp1_helios_primitives::types::{ProofInputs as HeliosInputs, ProofOutputs as HeliosOutputs};
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin, include_elf};
@@ -275,27 +275,32 @@ async fn main() -> Result<()> {
             .run()
             .context("Failed to prove")?;
 
-        // next_committee_hash:
-        let next_committee_hash: [u8; 32] = helios_outputs
-            .nextSyncCommitteeHash
-            .to_vec()
-            .try_into()
-            .unwrap();
+        let wrapper_inputs = WrapperCircuitInputs {
+            recursive_proof: recursive_proof.bytes(),
+            recursive_public_values: recursive_proof.public_values.to_vec(),
+            recursive_vk: wrapper_vk.bytes32(),
+        };
 
-        // only update the active committee in the service stateif Helios committed a new one as output
-        if next_committee_hash != [0; 32] {
-            active_committee_hash = next_committee_hash.try_into().unwrap();
-        }
+        // Generate the recursive proof
+        let mut stdin = SP1Stdin::new();
+        stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
+
+        // the final wrapped proof to send to the coprocessor
+        let _final_wrapped_proof = client
+            .prove(&wrapper_pk, &stdin)
+            .groth16()
+            .run()
+            .context("Failed to prove")?;
 
         // Decode the recursive proof outputs
-        let recursive_outputs: RecursionCircuitOutputs =
+        let wrapped_outputs: RecursionCircuitOutputs =
             borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
 
         // Update the service state with new trusted information
-        service_state.most_recent_proof = Some(proof.clone());
+        service_state.most_recent_proof = Some(recursive_proof.clone());
         service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
-        service_state.trusted_height = recursive_outputs.height;
-        service_state.trusted_root = recursive_outputs.root.try_into().unwrap();
+        service_state.trusted_height = wrapped_outputs.height;
+        service_state.trusted_root = wrapped_outputs.root.try_into().unwrap();
         service_state.update_counter += 1;
         // Save the updated state to the database
         state_manager.save_state(&service_state)?;
