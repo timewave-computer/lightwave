@@ -65,6 +65,7 @@ pub fn main() {
 
         // Output the state root and block height
         let outputs = RecursionCircuitOutputs {
+            active_committee: TRUSTED_SYNC_COMMITTEE_HASH,
             root: state_root.to_vec(),
             height: unpad_block_number(&height),
         };
@@ -78,6 +79,7 @@ pub fn main() {
                 .expect("Previous proof is not provided"),
             &inputs
                 .recursive_public_values
+                .as_ref()
                 .expect("Previous public values is not provided"),
             // todo: hardcode this verifying key (must be the Wrapper circuit VK)
             &inputs.recursive_vk.expect("Previous vk is not provided"),
@@ -85,20 +87,32 @@ pub fn main() {
         )
         .expect("Failed to verify previous proof");
 
-        let previous_helios_output: HeliosOutputs =
-            HeliosOutputs::abi_decode(&inputs.helios_public_values, false).unwrap();
+        let recursive_proof_outputs: RecursionCircuitOutputs = borsh::from_slice(
+            &inputs
+                .recursive_public_values
+                .expect("Previous public values is not provided"),
+        )
+        .unwrap();
 
-        // Assert that it matches the previous committee from our service state
-        // this is a trust assumption.
-        // To elimintate this trust assumption we have to maintain the active committee
-        // on chain.
+        let mut next_active_sync_committee: [u8; 32] = recursive_proof_outputs.active_committee;
+        // if there is a new sync committee, we want to commit it for the next round
+        if helios_output.nextSyncCommitteeHash != [0u8; 32] {
+            next_active_sync_committee = helios_output
+                .nextSyncCommitteeHash
+                .to_vec()
+                .try_into()
+                .expect("Failed to fit committeeHash into slice");
+        }
+
+        // assert that the previous committee of the new proof matches the expected active committee
         assert_eq!(
-            inputs.active_committee_hash,
-            previous_helios_output.prevSyncCommitteeHash
+            helios_output.prevSyncCommitteeHash,
+            recursive_proof_outputs.active_committee
         );
 
         // Output the state root and block height
         let outputs = RecursionCircuitOutputs {
+            active_committee: next_active_sync_committee,
             root: state_root.to_vec(),
             height: unpad_block_number(&height),
         };

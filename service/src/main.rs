@@ -173,7 +173,7 @@ async fn main() -> Result<()> {
     // Main service loop
     loop {
         // Set up the proving keys and verification keys for all circuits
-        let (helios_pk, helios_vk) = client.setup(HELIOS_ELF);
+        let (helios_pk, _) = client.setup(HELIOS_ELF);
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf);
         let (wrapper_pk, wrapper_vk) = client.setup(&wrapper_elf);
         println!("Recursive VK: {:?}", recursive_vk.bytes32());
@@ -259,7 +259,7 @@ async fn main() -> Result<()> {
             helios_public_values: proof.public_values.to_vec(),
             recursive_proof: previous_proof.as_ref().map(|p| p.bytes()),
             recursive_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
-            recursive_vk: previous_proof.as_ref().map(|_| wrapper_vk.bytes32()),
+            recursive_vk: previous_proof.as_ref().map(|_| recursive_vk.bytes32()),
             previous_head: service_state.trusted_slot,
         };
 

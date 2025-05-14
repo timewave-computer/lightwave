@@ -68,8 +68,7 @@ pub fn main() {
 
         // Output the state root and block height
         let outputs = RecursionCircuitOutputs {
-            // todo: make this the real first active sync committee
-            active_committee: [0u8; 32],
+            active_committee: TRUSTED_SYNC_COMMITTEE_HASH,
             root: state_root.to_vec(),
             height: unpad_block_number(&height),
         };
