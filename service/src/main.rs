@@ -2,7 +2,7 @@
 // It manages the state of the light client, generates and verifies proofs,
 // and maintains a chain of trusted state transitions.
 
-use std::{path::Path, time::Instant};
+use std::{fs::write, path::Path, time::Instant};
 
 use alloy_sol_types::SolType;
 use anyhow::{Context, Result};
@@ -28,6 +28,14 @@ struct Args {
     /// Delete the state file before starting
     #[arg(long)]
     delete: bool,
+
+    /// Initial slot number to start from (only used when initializing new state)
+    #[arg(long, default_missing_value = "7606080", num_args(0..=1))]
+    generate_recursion_circuit: Option<u64>,
+
+    /// Generate the wrapper circuit
+    #[arg(long)]
+    generate_wrapper_circuit: bool,
 
     /// dump the elfs as bytes
     #[arg(long)]
@@ -71,6 +79,7 @@ async fn main() -> Result<()> {
     if args.delete {
         state_manager.delete_state()?;
         println!("State file deleted successfully");
+        return Ok(());
     }
     let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
     let mut service_state = match state_manager.load_state()? {
@@ -81,6 +90,47 @@ async fn main() -> Result<()> {
 
     let recursive_elf_path = Path::new(&elfs_path).join("recursive-elf.bin");
     let wrapper_elf_path = Path::new(&elfs_path).join("wrapper-elf.bin");
+
+    // Generate the Recursion Circuit
+    if args.generate_recursion_circuit.is_some() {
+        let initial_slot = args.generate_recursion_circuit.unwrap_or(7606080);
+        // Initialize the preprocessor with the current trusted slot
+        let preprocessor = Preprocessor::new(service_state.trusted_slot);
+        // Get the next block's inputs for proof generation
+        let inputs = preprocessor.run().await?;
+
+        let helios_inputs: HeliosInputs = serde_cbor::from_slice(&inputs)?;
+        let trusted_committee_hash = helios_inputs
+            .store
+            .current_sync_committee
+            .clone()
+            .tree_hash_root()
+            .to_vec();
+
+        let committee_hash_formatted = format!("{:?}", trusted_committee_hash);
+        let template = include_str!("../../recursion/circuit/src/blueprint.rs");
+
+        let generated_code = template
+            .replace("{ committee_hash }", &committee_hash_formatted)
+            .replace("{ trusted_head }", &initial_slot.to_string());
+        write("recursion/circuit/src/main.rs", generated_code)
+            .context("Failed to generate recursive circuit from blueprint")?;
+
+        println!("Recursive circuit generated successfully");
+        return Ok(());
+    }
+
+    // Generate the Wrapper Circuit
+    if args.generate_wrapper_circuit {
+        let (_, vk) = client.setup(RECURSIVE_ELF_RUNTIME);
+        let vk_bytes = vk.bytes32();
+        let template = include_str!("../../recursion/wrapper-circuit/src/blueprint.rs");
+        let generated_code = template.replace("{ recursive_vk }", &format!("\"{}\"", vk_bytes));
+        write("recursion/wrapper-circuit/src/main.rs", generated_code)
+            .context("Failed to generate wrapper circuit from blueprint")?;
+        println!("Wrapper circuit generated successfully");
+        return Ok(());
+    }
 
     // Dump the ELFs as bytes
     if args.dump_elfs {
