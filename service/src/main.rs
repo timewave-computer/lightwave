@@ -12,7 +12,7 @@ use beacon_electra::{
 };
 use clap::Parser;
 use preprocessor::Preprocessor;
-use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
+use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
 mod helpers;
 use sp1_helios_primitives::types::{ProofInputs as HeliosInputs, ProofOutputs as HeliosOutputs};
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin, include_elf};
@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
         let (helios_pk, helios_vk) = client.setup(HELIOS_ELF);
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf);
         let (wrapper_pk, wrapper_vk) = client.setup(&wrapper_elf);
-
+        println!("Recursive VK: {:?}", recursive_vk.bytes32());
         // Initialize the preprocessor with the current trusted slot
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
 
@@ -209,10 +209,9 @@ async fn main() -> Result<()> {
             electra_header: electra_header,
             helios_proof: proof.bytes(),
             helios_public_values: proof.public_values.to_vec(),
-            helios_vk: helios_vk.bytes32(),
-            previous_proof: previous_proof.as_ref().map(|p| p.bytes()),
-            previous_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
-            previous_vk: previous_proof.as_ref().map(|_| wrapper_vk.bytes32()),
+            recursive_proof: previous_proof.as_ref().map(|p| p.bytes()),
+            recursive_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
+            recursive_vk: previous_proof.as_ref().map(|_| wrapper_vk.bytes32()),
             previous_head: service_state.trusted_slot,
         };
 
