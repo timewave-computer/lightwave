@@ -2,7 +2,6 @@ use beacon_electra::types::electra::{ElectraBlockBodyRoots, ElectraBlockHeader};
 use borsh::{BorshDeserialize, BorshSerialize};
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct RecursionCircuitInputs {
-    pub active_committee_hash: [u8; 32],
     pub electra_body_roots: ElectraBlockBodyRoots,
     pub electra_header: ElectraBlockHeader,
     pub helios_proof: Vec<u8>,
@@ -22,6 +21,8 @@ pub struct WrapperCircuitInputs {
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct RecursionCircuitOutputs {
+    // active committee
+    pub active_committee: [u8; 32],
     // the execution state root
     pub root: Vec<u8>,
     // the height of the execution block

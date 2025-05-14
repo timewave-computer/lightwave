@@ -59,7 +59,6 @@ pub const WRAPPER_ELF_RUNTIME: &[u8] = include_elf!("wrapper-circuit");
 ///    - Commits execution block height and state root instead of beacon header
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut active_committee_hash: [u8; 32] = [0; 32];
     let start_time = Instant::now();
     // Parse command line arguments
     let args = Args::parse();
@@ -254,7 +253,6 @@ async fn main() -> Result<()> {
         };
 
         let recursion_inputs = RecursionCircuitInputs {
-            active_committee_hash: active_committee_hash,
             electra_body_roots: electra_body_roots,
             electra_header: electra_header,
             helios_proof: proof.bytes(),
