@@ -19,6 +19,12 @@ cargo run --bin service --release -- --generate-wrapper-circuit
 cargo run --bin service --release -- --dump-elfs
 ```
 
+> [!NOTE]
+> It is extremely important to dump the latest elf before generating the circuits.
+> If you use the wrong elfs for the circuit generation, then the vks might be invalid
+> and proof verification might fail.
+
+
 To start the service:
 ```shell
 cargo run --bin service --release

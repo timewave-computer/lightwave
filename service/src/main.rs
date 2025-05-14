@@ -10,12 +10,15 @@ use beacon_electra::{
     extract_electra_block_body, get_beacon_block_header, get_electra_block,
     types::electra::ElectraBlockHeader,
 };
+
 use clap::Parser;
 use preprocessor::Preprocessor;
 use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
+
 mod helpers;
 use sp1_helios_primitives::types::{ProofInputs as HeliosInputs, ProofOutputs as HeliosOutputs};
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin, include_elf};
+
 mod preprocessor;
 mod state;
 use state::StateManager;
@@ -46,6 +49,7 @@ struct Args {
 pub const HELIOS_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-helios-elf");
 pub const RECURSIVE_ELF_RUNTIME: &[u8] = include_elf!("recursion-circuit");
 pub const WRAPPER_ELF_RUNTIME: &[u8] = include_elf!("wrapper-circuit");
+pub const DEFAULT_SLOT: u64 = 7606080;
 
 /// Main entry point for the light client service.
 ///
@@ -64,14 +68,18 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     // Load environment variables and initialize the prover client
     dotenvy::dotenv().ok();
+
     let consensus_url = std::env::var("SOURCE_CONSENSUS_RPC_URL").unwrap_or_default();
+
     let db_path =
         std::env::var("SERVICE_STATE_DB_PATH").unwrap_or_else(|_| "service_state.db".to_string());
+
     let client = ProverClient::from_env();
     // Create parent directory if it doesn't exist
     if let Some(parent) = Path::new(&db_path).parent() {
         std::fs::create_dir_all(parent).context("Failed to create database directory")?;
     }
+
     // Initialize the state manager with a database file
     let state_manager = StateManager::new(Path::new(&db_path))?;
     // Delete state if --delete flag is set
@@ -80,19 +88,20 @@ async fn main() -> Result<()> {
         println!("State file deleted successfully");
         return Ok(());
     }
+
     let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
     let mut service_state = match state_manager.load_state()? {
         Some(state) => state,
-        None => state_manager.initialize_state(7606080)?,
+        None => state_manager.initialize_state(DEFAULT_SLOT)?,
     };
-    let elfs_path = std::env::var("ELFS_OUT").unwrap_or_else(|_| "elfs/variable".to_string());
 
+    let elfs_path = std::env::var("ELFS_OUT").unwrap_or_else(|_| "elfs/variable".to_string());
     let recursive_elf_path = Path::new(&elfs_path).join("recursive-elf.bin");
     let wrapper_elf_path = Path::new(&elfs_path).join("wrapper-elf.bin");
 
     // Generate the Recursion Circuit
     if args.generate_recursion_circuit.is_some() {
-        let initial_slot = args.generate_recursion_circuit.unwrap_or(7606080);
+        let initial_slot = args.generate_recursion_circuit.unwrap_or(DEFAULT_SLOT);
         // Initialize the preprocessor with the current trusted slot
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
         // Get the next block's inputs for proof generation
@@ -123,10 +132,13 @@ async fn main() -> Result<()> {
     if args.generate_wrapper_circuit {
         let (_, vk) = client.setup(RECURSIVE_ELF_RUNTIME);
         let vk_bytes = vk.bytes32();
+
         let template = include_str!("../../recursion/wrapper-circuit/src/blueprint.rs");
         let generated_code = template.replace("{ recursive_vk }", &format!("\"{}\"", vk_bytes));
+
         write("recursion/wrapper-circuit/src/main.rs", generated_code)
             .context("Failed to generate wrapper circuit from blueprint")?;
+
         println!("Wrapper circuit generated successfully");
         return Ok(());
     }
@@ -176,6 +188,7 @@ async fn main() -> Result<()> {
         let (helios_pk, _) = client.setup(HELIOS_ELF);
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf);
         let (wrapper_pk, wrapper_vk) = client.setup(&wrapper_elf);
+
         println!("Recursive VK: {:?}", recursive_vk.bytes32());
         // Initialize the preprocessor with the current trusted slot
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
@@ -189,6 +202,7 @@ async fn main() -> Result<()> {
                 continue;
             }
         };
+
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&inputs);
 
