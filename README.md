@@ -12,13 +12,7 @@ down for an extended period (25 hours +).
 In order to leverage the strategy, run the following sequence of commands:
 
 ```shell
-cargo run --bin service --release -- --delete --generate-recursion-circuit NEW_TRUSTED_SLOT_U64
-
-cargo run --bin service --release -- --dump-elfs
-
-cargo run --bin service --release -- --generate-wrapper-circuit
-
-cargo run --bin service --release -- --dump-elfs
+make build-circuits SLOT=NEW_TRUSTED_SLOT_NUMBER
 ```
 
 > [!NOTE]

@@ -48,7 +48,7 @@ impl Preprocessor {
             ));
         }
         let latest_finalized_slot_period = latest_finalized_slot / 8192;
-        let mut period_distance = latest_finalized_slot_period - trusted_slot_period;
+        let period_distance = latest_finalized_slot_period - trusted_slot_period;
         /*println!("Period distance: {}", period_distance);
         if period_distance == 0 {
             period_distance = 1;
@@ -76,6 +76,7 @@ impl Preprocessor {
 /// the most recently finalized slot number.
 pub async fn get_latest_finalized_slot() -> Result<u64> {
     let consensus_url = env::var("SOURCE_CONSENSUS_RPC_URL")?;
+    println!("Consensus URL: {:?}", consensus_url);
     let resp: Value = reqwest::get(format!("{}/eth/v1/beacon/headers/finalized", consensus_url))
         .await?
         .json()
@@ -83,7 +84,7 @@ pub async fn get_latest_finalized_slot() -> Result<u64> {
 
     let slot_str = resp["data"]["header"]["message"]["slot"]
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing or invalid slot field"))?;
+        .ok_or_else(|| anyhow::anyhow!("Failed to get slot from response!"))?;
 
     let slot = slot_str.parse::<u64>()?;
     Ok(slot)

@@ -33,7 +33,7 @@ struct Args {
     delete: bool,
 
     /// Initial slot number to start from (only used when initializing new state)
-    #[arg(long, default_missing_value = "7606080", num_args(0..=1))]
+    #[arg(long)]
     generate_recursion_circuit: Option<u64>,
 
     /// Generate the wrapper circuit
@@ -49,7 +49,7 @@ struct Args {
 pub const HELIOS_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-helios-elf");
 pub const RECURSIVE_ELF_RUNTIME: &[u8] = include_elf!("recursion-circuit");
 pub const WRAPPER_ELF_RUNTIME: &[u8] = include_elf!("wrapper-circuit");
-pub const DEFAULT_SLOT: u64 = 7606080;
+pub const DEFAULT_SLOT: u64 = 11709440;
 
 /// Main entry point for the light client service.
 ///
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
     let db_path =
         std::env::var("SERVICE_STATE_DB_PATH").unwrap_or_else(|_| "service_state.db".to_string());
 
-    let client = ProverClient::from_env();
+    let client = ProverClient::new();
     // Create parent directory if it doesn't exist
     if let Some(parent) = Path::new(&db_path).parent() {
         std::fs::create_dir_all(parent).context("Failed to create database directory")?;
@@ -103,7 +103,8 @@ async fn main() -> Result<()> {
     if args.generate_recursion_circuit.is_some() {
         let initial_slot = args.generate_recursion_circuit.unwrap_or(DEFAULT_SLOT);
         // Initialize the preprocessor with the current trusted slot
-        let preprocessor = Preprocessor::new(service_state.trusted_slot);
+        let preprocessor =
+            Preprocessor::new(args.generate_recursion_circuit.expect("Missing Slot"));
         // Get the next block's inputs for proof generation
         let inputs = preprocessor.run().await?;
 
@@ -160,6 +161,7 @@ async fn main() -> Result<()> {
             "Failed to dump wrapper ELF to {}",
             wrapper_elf_path.display()
         ))?;
+
         println!("ELFs dumped successfully");
         return Ok(());
     }
@@ -177,6 +179,7 @@ async fn main() -> Result<()> {
         "Failed to read recursive elf from {}",
         recursive_elf_path.display()
     ))?;
+
     let wrapper_elf = std::fs::read(&wrapper_elf_path).context(format!(
         "Failed to read wrapper elf from {}",
         wrapper_elf_path.display()
@@ -243,15 +246,7 @@ async fn main() -> Result<()> {
         };
 
         // Get the previous proof if this isn't the first update
-        let previous_proof = if service_state.update_counter == 0 {
-            None
-        } else {
-            Some(
-                service_state
-                    .most_recent_recursive_proof
-                    .expect("Missing previous proof in state"),
-            )
-        };
+        let previous_proof = service_state.most_recent_recursive_proof;
 
         let recursion_inputs = RecursionCircuitInputs {
             electra_body_roots: electra_body_roots,
