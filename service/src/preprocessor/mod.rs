@@ -76,7 +76,6 @@ impl Preprocessor {
 /// the most recently finalized slot number.
 pub async fn get_latest_finalized_slot() -> Result<u64> {
     let consensus_url = env::var("SOURCE_CONSENSUS_RPC_URL")?;
-    println!("Consensus URL: {:?}", consensus_url);
     let resp: Value = reqwest::get(format!("{}/eth/v1/beacon/headers/finalized", consensus_url))
         .await?
         .json()
