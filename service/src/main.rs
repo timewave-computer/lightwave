@@ -187,9 +187,9 @@ async fn main() -> Result<()> {
         // Set up the proving keys and verification keys for all circuits
         let (helios_pk, _) = client.setup(HELIOS_ELF);
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf);
-        let (wrapper_pk, wrapper_vk) = client.setup(&wrapper_elf);
+        let (wrapper_pk, _) = client.setup(&wrapper_elf);
 
-        println!("Recursive VK: {:?}", recursive_vk.bytes32());
+        println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
         // Initialize the preprocessor with the current trusted slot
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
 
@@ -206,21 +206,8 @@ async fn main() -> Result<()> {
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&inputs);
 
-        // For the first proof, store the genesis sync committee hash
-        if service_state.update_counter == 0 {
-            let helios_inputs: HeliosInputs = serde_cbor::from_slice(&inputs)?;
-            service_state.genesis_committee_hash = Some(hex::encode(
-                helios_inputs
-                    .store
-                    .current_sync_committee
-                    .clone()
-                    .tree_hash_root()
-                    .to_vec(),
-            ));
-        }
-
         // Generate the Helios proof
-        let proof = match client
+        let helios_proof = match client
             .prove(&helios_pk, &stdin)
             .groth16()
             .run()
@@ -235,7 +222,7 @@ async fn main() -> Result<()> {
 
         // Decode the Helios proof outputs
         let helios_outputs: HeliosOutputs =
-            HeliosOutputs::abi_decode(&proof.public_values.to_vec(), false).unwrap();
+            HeliosOutputs::abi_decode(&helios_proof.public_values.to_vec(), false).unwrap();
 
         // Fetch additional block data needed for execution payload (state_root, height) verification
         let electra_block =
@@ -261,7 +248,7 @@ async fn main() -> Result<()> {
         } else {
             Some(
                 service_state
-                    .most_recent_proof
+                    .most_recent_recursive_proof
                     .expect("Missing previous proof in state"),
             )
         };
@@ -269,11 +256,11 @@ async fn main() -> Result<()> {
         let recursion_inputs = RecursionCircuitInputs {
             electra_body_roots: electra_body_roots,
             electra_header: electra_header,
-            helios_proof: proof.bytes(),
-            helios_public_values: proof.public_values.to_vec(),
+            helios_proof: helios_proof.bytes(),
+            helios_public_values: helios_proof.public_values.to_vec(),
             recursive_proof: previous_proof.as_ref().map(|p| p.bytes()),
             recursive_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
-            recursive_vk: previous_proof.as_ref().map(|_| recursive_vk.bytes32()),
+            recursive_vk: recursive_vk.bytes32(),
             previous_head: service_state.trusted_slot,
         };
 
@@ -290,7 +277,6 @@ async fn main() -> Result<()> {
         let wrapper_inputs = WrapperCircuitInputs {
             recursive_proof: recursive_proof.bytes(),
             recursive_public_values: recursive_proof.public_values.to_vec(),
-            recursive_vk: wrapper_vk.bytes32(),
         };
 
         // Generate the recursive proof
@@ -298,7 +284,7 @@ async fn main() -> Result<()> {
         stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
 
         // the final wrapped proof to send to the coprocessor
-        let _final_wrapped_proof = client
+        let final_wrapped_proof = client
             .prove(&wrapper_pk, &stdin)
             .groth16()
             .run()
@@ -309,11 +295,14 @@ async fn main() -> Result<()> {
             borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
 
         // Update the service state with new trusted information
-        service_state.most_recent_proof = Some(recursive_proof.clone());
+        service_state.most_recent_recursive_proof = Some(recursive_proof.clone());
+        // this is the proof that should be returned by the API endpoint get_proof
+        service_state.most_recent_wrapper_proof = Some(final_wrapped_proof);
         service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
         service_state.trusted_height = wrapped_outputs.height;
         service_state.trusted_root = wrapped_outputs.root.try_into().unwrap();
         service_state.update_counter += 1;
+
         // Save the updated state to the database
         state_manager.save_state(&service_state)?;
 

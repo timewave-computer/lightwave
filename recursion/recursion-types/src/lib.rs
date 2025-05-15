@@ -8,7 +8,7 @@ pub struct RecursionCircuitInputs {
     pub helios_public_values: Vec<u8>,
     pub recursive_proof: Option<Vec<u8>>,
     pub recursive_public_values: Option<Vec<u8>>,
-    pub recursive_vk: Option<String>,
+    pub recursive_vk: String,
     pub previous_head: u64,
 }
 
@@ -16,7 +16,6 @@ pub struct RecursionCircuitInputs {
 pub struct WrapperCircuitInputs {
     pub recursive_proof: Vec<u8>,
     pub recursive_public_values: Vec<u8>,
-    pub recursive_vk: String,
 }
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
@@ -27,4 +26,6 @@ pub struct RecursionCircuitOutputs {
     pub root: Vec<u8>,
     // the height of the execution block
     pub height: u64,
+    // the vk that was used to verify the previous recursive proof
+    pub vk: String,
 }

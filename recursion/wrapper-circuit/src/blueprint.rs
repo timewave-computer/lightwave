@@ -4,7 +4,7 @@
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
-use recursion_types::WrapperCircuitInputs;
+use recursion_types::{RecursionCircuitOutputs, WrapperCircuitInputs};
 use sp1_verifier::Groth16Verifier;
 
 const RECURSIVE_VK: &str = { recursive_vk };
@@ -17,7 +17,14 @@ fn main() {
     let inputs: WrapperCircuitInputs =
         borsh::from_slice(&sp1_zkvm::io::read_vec()).expect("Failed to deserialize Inputs");
 
-    assert_eq!(inputs.recursive_vk, RECURSIVE_VK);
+    let recursive_outputs: RecursionCircuitOutputs =
+        borsh::from_slice(&inputs.recursive_public_values)
+            .expect("Failed to deserialize recursive Outputs");
+
+    // Assert that the VK used for the verification of the recursive proof (if any) matches
+    // exactly the VK of the recursive circuit.
+    // This is required for every proof except the first one.
+    assert_eq!(recursive_outputs.vk, RECURSIVE_VK);
     // Get the public outputs from the recursive proof
     let public_outputs = inputs.recursive_public_values;
 

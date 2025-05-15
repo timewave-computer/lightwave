@@ -27,5 +27,8 @@ hex = "0.4"
 alloy-sol-types.workspace = true
 rusqlite = "=0.28.0"
 
+[features]
+cuda = ["sp1-sdk/cuda"]
+
 [build-dependencies]
 sp1-build = { git = "https://github.com/timewave-computer/sp1", branch = "jonas/fix-4.1.7-syscall" }

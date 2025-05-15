@@ -66,11 +66,12 @@ pub fn main() {
             TRUSTED_SYNC_COMMITTEE_HASH
         );
 
-        // Output the state root and block height
+        // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
             active_committee: TRUSTED_SYNC_COMMITTEE_HASH,
             root: state_root.to_vec(),
             height: unpad_block_number(&height),
+            vk: inputs.recursive_vk,
         };
 
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
@@ -85,11 +86,12 @@ pub fn main() {
                 .as_ref()
                 .expect("Previous public values is not provided"),
             // todo: hardcode this verifying key (must be the Wrapper circuit VK)
-            &inputs.recursive_vk.expect("Previous vk is not provided"),
+            &inputs.recursive_vk,
             groth16_vk,
         )
         .expect("Failed to verify previous proof");
 
+        // deserialize the inputs required for the recursive verification
         let recursive_proof_outputs: RecursionCircuitOutputs = borsh::from_slice(
             &inputs
                 .recursive_public_values
@@ -97,7 +99,11 @@ pub fn main() {
         )
         .unwrap();
 
+        // there might be a new sync committee in charge moving forward,
+        // if that is the case we want to update our service state to reflect that
+        // rotation
         let mut next_active_sync_committee: [u8; 32] = recursive_proof_outputs.active_committee;
+
         // if there is a new sync committee, we want to commit it for the next round
         if helios_output.nextSyncCommitteeHash != [0u8; 32] {
             next_active_sync_committee = helios_output
@@ -107,17 +113,18 @@ pub fn main() {
                 .expect("Failed to fit committeeHash into slice");
         }
 
-        // assert that the previous committee of the new proof matches the expected active committee
+        // Assert that the previous committee of the new proof matches the expected active committee
         assert_eq!(
             helios_output.prevSyncCommitteeHash,
             recursive_proof_outputs.active_committee
         );
 
-        // Output the state root and block height
+        // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
             active_committee: next_active_sync_committee,
             root: state_root.to_vec(),
             height: unpad_block_number(&height),
+            vk: inputs.recursive_vk,
         };
 
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
