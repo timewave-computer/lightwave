@@ -144,7 +144,11 @@ async fn main() -> Result<()> {
     let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
     let service_state = match state_manager.load_state()? {
         Some(state) => state,
-        None => state_manager.initialize_state(DEFAULT_SLOT)?,
+        None => {
+            // If no state exists, check if we have a specific slot from args, otherwise use DEFAULT_SLOT
+            let initial_slot = args.generate_recursion_circuit.unwrap_or(DEFAULT_SLOT);
+            state_manager.initialize_state(initial_slot)?
+        }
     };
 
     let elfs_path = std::env::var("ELFS_OUT").unwrap_or_else(|_| "elfs/variable".to_string());

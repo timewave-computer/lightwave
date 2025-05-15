@@ -23,7 +23,12 @@ make build-circuits SLOT=NEW_TRUSTED_SLOT_NUMBER
 
 To start the service:
 ```shell
-cargo run --bin service --release
+make run
+```
+
+To continue an existing service with a valid state db:
+```shell
+make continue
 ```
 
 # Technicalities (low-level)
