@@ -2,27 +2,23 @@
 // It manages the state of the light client, generates and verifies proofs,
 // and maintains a chain of trusted state transitions.
 
-use std::{fs::write, path::Path, time::Instant};
-
-use alloy_sol_types::SolType;
 use anyhow::{Context, Result};
-use beacon_electra::{
-    extract_electra_block_body, get_beacon_block_header, get_electra_block,
-    types::electra::ElectraBlockHeader,
-};
-
+use axum::{Router, routing::get};
+use std::{fs::write, path::Path};
+mod api;
+use api::get_proof;
 use clap::Parser;
 use preprocessor::Preprocessor;
-use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
-
-mod helpers;
-use sp1_helios_primitives::types::{ProofInputs as HeliosInputs, ProofOutputs as HeliosOutputs};
-use sp1_sdk::{HashableKey, ProverClient, SP1Stdin, include_elf};
-
+use sp1_helios_primitives::types::ProofInputs as HeliosInputs;
+use sp1_sdk::{HashableKey, ProverClient, include_elf};
+use tokio::signal;
+use tracing::{error, info};
 mod preprocessor;
 mod state;
 use state::StateManager;
 use tree_hash::TreeHash;
+mod prover;
+use prover::run_prover_loop;
 
 /// Command line arguments for the service
 #[derive(Parser, Debug)]
@@ -63,9 +59,66 @@ pub const DEFAULT_SLOT: u64 = 11709792;
 ///    - Commits execution block height and state root instead of beacon header
 #[tokio::main]
 async fn main() -> Result<()> {
-    let start_time = Instant::now();
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false)
+        .init();
+
     // Parse command line arguments
     let args = Args::parse();
+
+    // Load environment variables
+    dotenvy::dotenv().ok();
+
+    // Get server port from environment or use default
+    let port = std::env::var("API_PORT").unwrap_or_else(|_| "3000".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+
+    // Create router
+    let app = Router::new().route("/", get(get_proof));
+
+    // Create a shutdown signal handler
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let app = app.into_make_service();
+
+    // Start the server in a separate task
+    let server_handle = tokio::spawn(async move {
+        let listener = match tokio::net::TcpListener::bind(&addr).await {
+            Ok(listener) => {
+                info!("API server listening on {}", addr);
+                listener
+            }
+            Err(e) => {
+                error!("Failed to bind to {}: {}", addr, e);
+                return Err(e);
+            }
+        };
+
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+                info!("API server shutting down gracefully");
+            })
+            .await
+            .map_err(|e| {
+                error!("API server error: {}", e);
+                e
+            })
+    });
+
+    // Handle shutdown signals
+    tokio::spawn(async move {
+        if let Err(e) = signal::ctrl_c().await {
+            error!("Failed to listen for ctrl+c: {}", e);
+        }
+        info!("Received shutdown signal");
+        let _ = shutdown_tx.send(());
+    });
+
     // Load environment variables and initialize the prover client
     dotenvy::dotenv().ok();
 
@@ -74,7 +127,6 @@ async fn main() -> Result<()> {
     let db_path =
         std::env::var("SERVICE_STATE_DB_PATH").unwrap_or_else(|_| "service_state.db".to_string());
 
-    let client = ProverClient::new();
     // Create parent directory if it doesn't exist
     if let Some(parent) = Path::new(&db_path).parent() {
         std::fs::create_dir_all(parent).context("Failed to create database directory")?;
@@ -90,7 +142,7 @@ async fn main() -> Result<()> {
     }
 
     let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
-    let mut service_state = match state_manager.load_state()? {
+    let service_state = match state_manager.load_state()? {
         Some(state) => state,
         None => state_manager.initialize_state(DEFAULT_SLOT)?,
     };
@@ -131,6 +183,7 @@ async fn main() -> Result<()> {
 
     // Generate the Wrapper Circuit
     if args.generate_wrapper_circuit {
+        let client = ProverClient::new();
         let (_, vk) = client.setup(RECURSIVE_ELF_RUNTIME);
         let vk_bytes = vk.bytes32();
 
@@ -185,125 +238,30 @@ async fn main() -> Result<()> {
         wrapper_elf_path.display()
     ))?;
 
-    // Main service loop
-    loop {
-        // Set up the proving keys and verification keys for all circuits
-        let (helios_pk, _) = client.setup(HELIOS_ELF);
-        let (recursive_pk, recursive_vk) = client.setup(&recursive_elf);
-        let (wrapper_pk, _) = client.setup(&wrapper_elf);
+    // Start the service loop in a separate task
+    let service_handle = tokio::spawn(run_prover_loop(
+        state_manager,
+        service_state,
+        recursive_elf,
+        wrapper_elf,
+        consensus_url,
+    ));
 
-        println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
-        // Initialize the preprocessor with the current trusted slot
-        let preprocessor = Preprocessor::new(service_state.trusted_slot);
-
-        // Get the next block's inputs for proof generation
-        let inputs = match preprocessor.run().await {
-            Ok(inputs) => inputs,
-            Err(e) => {
-                println!("[Warning]: {:?}", e);
-                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                continue;
+    // Wait for both tasks to conclude
+    tokio::select! {
+        server_result = server_handle => {
+            if let Err(e) = server_result {
+                error!("Server task failed: {}", e);
+                return Err(anyhow::anyhow!("Server task failed: {}", e));
             }
-        };
-
-        let mut stdin = SP1Stdin::new();
-        stdin.write_slice(&inputs);
-
-        // Generate the Helios proof
-        let helios_proof = match client
-            .prove(&helios_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")
-        {
-            Ok(proof) => proof,
-            Err(e) => {
-                println!("Proof failed with error: {:?}", e);
-                continue;
+        }
+        service_result = service_handle => {
+            if let Err(e) = service_result {
+                error!("Service loop failed: {}", e);
+                return Err(anyhow::anyhow!("Service loop failed: {}", e));
             }
-        };
-
-        // Decode the Helios proof outputs
-        let helios_outputs: HeliosOutputs =
-            HeliosOutputs::abi_decode(&helios_proof.public_values.to_vec(), false).unwrap();
-
-        // Fetch additional block data needed for execution payload (state_root, height) verification
-        let electra_block =
-            get_electra_block(helios_outputs.newHead.try_into()?, &consensus_url).await;
-
-        // Extract and process block data
-        let electra_body_roots = extract_electra_block_body(electra_block);
-        let beacon_header =
-            get_beacon_block_header(helios_outputs.newHead.try_into()?, &consensus_url).await;
-
-        // Construct the zk-friendly Electra block header
-        let electra_header = ElectraBlockHeader {
-            slot: beacon_header.slot.as_u64(),
-            proposer_index: beacon_header.proposer_index,
-            parent_root: beacon_header.parent_root.to_vec().try_into().unwrap(),
-            state_root: beacon_header.state_root.to_vec().try_into().unwrap(),
-            body_root: beacon_header.body_root.to_vec().try_into().unwrap(),
-        };
-
-        // Get the previous proof if this isn't the first update
-        let previous_proof = service_state.most_recent_recursive_proof;
-
-        let recursion_inputs = RecursionCircuitInputs {
-            electra_body_roots: electra_body_roots,
-            electra_header: electra_header,
-            helios_proof: helios_proof.bytes(),
-            helios_public_values: helios_proof.public_values.to_vec(),
-            recursive_proof: previous_proof.as_ref().map(|p| p.bytes()),
-            recursive_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
-            recursive_vk: recursive_vk.bytes32(),
-            previous_head: service_state.trusted_slot,
-        };
-
-        // Generate the recursive proof
-        let mut stdin = SP1Stdin::new();
-        stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
-
-        let recursive_proof = client
-            .prove(&recursive_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")?;
-
-        let wrapper_inputs = WrapperCircuitInputs {
-            recursive_proof: recursive_proof.bytes(),
-            recursive_public_values: recursive_proof.public_values.to_vec(),
-        };
-
-        // Generate the recursive proof
-        let mut stdin = SP1Stdin::new();
-        stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
-
-        // the final wrapped proof to send to the coprocessor
-        let final_wrapped_proof = client
-            .prove(&wrapper_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")?;
-
-        // Decode the recursive proof outputs
-        let wrapped_outputs: RecursionCircuitOutputs =
-            borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
-
-        // Update the service state with new trusted information
-        service_state.most_recent_recursive_proof = Some(recursive_proof.clone());
-        // this is the proof that should be returned by the API endpoint get_proof
-        service_state.most_recent_wrapper_proof = Some(final_wrapped_proof);
-        service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
-        service_state.trusted_height = wrapped_outputs.height;
-        service_state.trusted_root = wrapped_outputs.root.try_into().unwrap();
-        service_state.update_counter += 1;
-
-        // Save the updated state to the database
-        state_manager.save_state(&service_state)?;
-
-        // Log the updated state and elapsed time
-        println!("New Service State: {:?} \n", service_state);
-        let elapsed_time = start_time.elapsed();
-        println!("Alive for: {:?}", elapsed_time);
+        }
     }
+
+    Ok(())
 }

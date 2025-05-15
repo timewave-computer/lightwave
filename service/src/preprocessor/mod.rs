@@ -4,6 +4,7 @@ use helios_operator::{get_checkpoint, get_client, get_updates};
 use serde_json::Value;
 use sp1_helios_primitives::types::ProofInputs;
 use std::env;
+mod helpers;
 
 /// Type alias for the serialized Helios program inputs
 pub type HeliosInputSlice = Vec<u8>;

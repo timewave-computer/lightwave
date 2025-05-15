@@ -26,6 +26,9 @@ borsh.workspace = true
 hex = "0.4"
 alloy-sol-types.workspace = true
 rusqlite = "=0.28.0"
+axum = "0.8.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
 cuda = ["sp1-sdk/cuda"]

@@ -39,6 +39,28 @@ impl StateManager {
         Ok(Self { conn })
     }
 
+    pub fn from_env() -> Result<Self> {
+        let db_path = std::env::var("SERVICE_STATE_DB_PATH")
+            .unwrap_or_else(|_| "service_state.db".to_string());
+        let conn = Connection::open(db_path)?;
+
+        // Create the state table if it doesn't exist
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS service_state (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        most_recent_recursive_proof BLOB,
+                        most_recent_wrapper_proof BLOB,
+                        trusted_slot INTEGER NOT NULL,
+                        trusted_height INTEGER NOT NULL,
+                        trusted_root BLOB NOT NULL,
+                        update_counter INTEGER NOT NULL
+                    )",
+            [],
+        )?;
+
+        Ok(Self { conn })
+    }
+
     pub fn save_state(&self, state: &ServiceState) -> Result<()> {
         let recursive_proof_bytes = state
             .most_recent_recursive_proof
