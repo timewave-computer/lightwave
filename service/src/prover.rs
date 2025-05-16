@@ -131,6 +131,7 @@ pub async fn run_prover_loop(
 
         // Update the service state with new trusted information
         service_state.most_recent_recursive_proof = Some(recursive_proof.clone());
+
         // this is the proof that should be returned by the API endpoint get_proof
         service_state.most_recent_wrapper_proof = Some(final_wrapped_proof);
         service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
