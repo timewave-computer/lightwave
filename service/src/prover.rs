@@ -7,7 +7,10 @@ use beacon_electra::{
 use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
-use std::time::Instant;
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use crate::{
     HELIOS_ELF,
@@ -23,13 +26,22 @@ pub async fn run_prover_loop(
     wrapper_elf: Vec<u8>,
     consensus_url: String,
 ) -> Result<()> {
-    let client = ProverClient::from_env();
+    let client = Arc::new(Mutex::new(ProverClient::from_env()));
     let start_time = Instant::now();
     loop {
         // Set up the proving keys and verification keys for all circuits
-        let (helios_pk, _) = client.setup(HELIOS_ELF);
-        let (recursive_pk, recursive_vk) = client.setup(&recursive_elf);
-        let (wrapper_pk, _) = client.setup(&wrapper_elf);
+        let (helios_pk, _) = {
+            let client_guard = client.lock().unwrap();
+            client_guard.setup(HELIOS_ELF)
+        };
+        let (recursive_pk, recursive_vk) = {
+            let client_guard = client.lock().unwrap();
+            client_guard.setup(&recursive_elf)
+        };
+        let (wrapper_pk, _) = {
+            let client_guard = client.lock().unwrap();
+            client_guard.setup(&wrapper_elf)
+        };
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
         // Initialize the preprocessor with the current trusted slot
@@ -49,16 +61,19 @@ pub async fn run_prover_loop(
         stdin.write_slice(&inputs);
 
         // Generate the Helios proof
-        let helios_proof = match client
-            .prove(&helios_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")
-        {
-            Ok(proof) => proof,
-            Err(e) => {
-                println!("Proof failed with error: {:?}", e);
-                continue;
+        let helios_proof = {
+            let client_guard = client.lock().unwrap();
+            match client_guard
+                .prove(&helios_pk, &stdin)
+                .groth16()
+                .run()
+                .context("Failed to prove")
+            {
+                Ok(proof) => proof,
+                Err(e) => {
+                    println!("Proof failed with error: {:?}", e);
+                    continue;
+                }
             }
         };
 
@@ -102,11 +117,14 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
-        let recursive_proof = client
-            .prove(&recursive_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")?;
+        let recursive_proof = {
+            let client_guard = client.lock().unwrap();
+            client_guard
+                .prove(&recursive_pk, &stdin)
+                .groth16()
+                .run()
+                .context("Failed to prove")?
+        };
 
         let wrapper_inputs = WrapperCircuitInputs {
             recursive_proof: recursive_proof.bytes(),
@@ -117,12 +135,21 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
 
+        // Clone the Arc for the spawned task
+        let client_clone = Arc::clone(&client);
+        let wrapper_pk_clone = wrapper_pk.clone();
+        let stdin_clone = stdin.clone();
+
         // the final wrapped proof to send to the coprocessor
-        let final_wrapped_proof = client
-            .prove(&wrapper_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")?;
+        let final_wrapped_proof = tokio::task::spawn_blocking(move || {
+            let client_guard = client_clone.lock().unwrap();
+            client_guard
+                .prove(&wrapper_pk_clone, &stdin_clone)
+                .groth16()
+                .run()
+                .context("Failed to prove")
+        })
+        .await??;
 
         // Decode the recursive proof outputs
         let wrapped_outputs: RecursionCircuitOutputs =
