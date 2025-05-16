@@ -111,7 +111,7 @@ pub fn main() {
 
         // Assert that the previous committee of the new proof matches the expected active committee
         assert_eq!(
-            helios_output.prevSyncCommitteeHash,
+            helios_output.syncCommitteeHash,
             recursive_proof_outputs.active_committee
         );
 
