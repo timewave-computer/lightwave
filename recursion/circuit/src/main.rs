@@ -12,7 +12,10 @@ use sp1_verifier::Groth16Verifier;
 
 // The trusted sync committee hash that was active at the trusted slot.
 // This is used to verify the initial state when starting from the trusted slot.
-const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [93, 147, 127, 93, 196, 118, 92, 210, 81, 104, 28, 159, 16, 71, 140, 248, 3, 133, 129, 205, 185, 38, 10, 179, 124, 239, 100, 170, 55, 156, 52, 139];
+const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
+    93, 147, 127, 93, 196, 118, 92, 210, 81, 104, 28, 159, 16, 71, 140, 248, 3, 133, 129, 205, 185,
+    38, 10, 179, 124, 239, 100, 170, 55, 156, 52, 139,
+];
 
 // The trusted slot number from which we start our light client chain.
 // This must be a slot where we have verified the sync committee hash.

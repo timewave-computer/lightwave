@@ -43,13 +43,21 @@ impl Preprocessor {
         let latest_finalized_slot = get_latest_finalized_slot().await?;
         // we only get a finality update every 32 slots, so we need to wait for the
         // latest finalized slot to be at least 32 slots ahead of the trusted slot
+        println!(
+            "latest_finalized_slot: {}, trusted_slot: {}",
+            latest_finalized_slot, self.trusted_slot
+        );
         if (latest_finalized_slot / 32) * 32 <= self.trusted_slot {
             return Err(anyhow::anyhow!(
                 "Waiting for new slot to be finalized, retry in 60 seconds!"
             ));
         }
         let latest_finalized_slot_period = latest_finalized_slot / 8192;
-        let period_distance = latest_finalized_slot_period - trusted_slot_period;
+        let mut period_distance = latest_finalized_slot_period - trusted_slot_period;
+        if period_distance == 0 {
+            // minimum period distance is 1
+            period_distance = 1;
+        }
         let updates = get_updates(&client, period_distance as u8).await;
         let finality_update = client.rpc.get_finality_update().await.unwrap();
         // Create program inputs
