@@ -45,7 +45,7 @@ struct Args {
 pub const HELIOS_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-helios-elf");
 pub const RECURSIVE_ELF_RUNTIME: &[u8] = include_elf!("recursion-circuit");
 pub const WRAPPER_ELF_RUNTIME: &[u8] = include_elf!("wrapper-circuit");
-pub const DEFAULT_SLOT: u64 = 11709792;
+pub const DEFAULT_SLOT: u64 = 11709440;
 
 /// Main entry point for the light client service.
 ///
