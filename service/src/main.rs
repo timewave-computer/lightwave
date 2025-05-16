@@ -85,40 +85,6 @@ async fn main() -> Result<()> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let app = app.into_make_service();
 
-    // Start the server in a separate task
-    let server_handle = tokio::spawn(async move {
-        let listener = match tokio::net::TcpListener::bind(&addr).await {
-            Ok(listener) => {
-                info!("API server listening on {}", addr);
-                listener
-            }
-            Err(e) => {
-                error!("Failed to bind to {}: {}", addr, e);
-                return Err(e);
-            }
-        };
-
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async {
-                shutdown_rx.await.ok();
-                info!("API server shutting down gracefully");
-            })
-            .await
-            .map_err(|e| {
-                error!("API server error: {}", e);
-                e
-            })
-    });
-
-    // Handle shutdown signals
-    tokio::spawn(async move {
-        if let Err(e) = signal::ctrl_c().await {
-            error!("Failed to listen for ctrl+c: {}", e);
-        }
-        info!("Received shutdown signal");
-        let _ = shutdown_tx.send(());
-    });
-
     // Load environment variables and initialize the prover client
     dotenvy::dotenv().ok();
 
@@ -158,6 +124,7 @@ async fn main() -> Result<()> {
     // Generate the Recursion Circuit
     if args.generate_recursion_circuit.is_some() {
         let initial_slot = args.generate_recursion_circuit.unwrap_or(DEFAULT_SLOT);
+
         // Initialize the preprocessor with the current trusted slot
         let preprocessor =
             Preprocessor::new(args.generate_recursion_circuit.expect("Missing Slot"));
@@ -222,6 +189,40 @@ async fn main() -> Result<()> {
         println!("ELFs dumped successfully");
         return Ok(());
     }
+
+    // Start the server in a separate task
+    let server_handle = tokio::spawn(async move {
+        let listener = match tokio::net::TcpListener::bind(&addr).await {
+            Ok(listener) => {
+                info!("API server listening on {}", addr);
+                listener
+            }
+            Err(e) => {
+                error!("Failed to bind to {}: {}", addr, e);
+                return Err(e);
+            }
+        };
+
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+                info!("API server shutting down gracefully");
+            })
+            .await
+            .map_err(|e| {
+                error!("API server error: {}", e);
+                e
+            })
+    });
+
+    // Handle shutdown signals
+    tokio::spawn(async move {
+        if let Err(e) = signal::ctrl_c().await {
+            error!("Failed to listen for ctrl+c: {}", e);
+        }
+        info!("Received shutdown signal");
+        let _ = shutdown_tx.send(());
+    });
 
     if !recursive_elf_path.exists() {
         println!(

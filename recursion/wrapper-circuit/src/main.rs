@@ -4,10 +4,10 @@
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
-use recursion_types::{RecursionCircuitOutputs, WrapperCircuitInputs};
+use recursion_types::{RecursionCircuitOutputs, WrapperCircuitInputs, WrapperCircuitOutputs};
 use sp1_verifier::Groth16Verifier;
 
-const RECURSIVE_VK: &str = "0x00033de2adae35b86aeddd18a5185cbdadcafad389af55532ef0ee29c06722af";
+const RECURSIVE_VK: &str = "0x008490f4c8898c3cbd1c0519ce61b6365edabcd6c62920efc9c29945ec5f9183";
 
 fn main() {
     // Get the Groth16 verification key for proof verification
@@ -40,5 +40,9 @@ fn main() {
 
     // Re-commit the public outputs after recursive proof verification
     // This ensures the outputs are available for the next proof in the chain
-    sp1_zkvm::io::commit_slice(&public_outputs);
+    let outputs = WrapperCircuitOutputs {
+        height: recursive_outputs.height,
+        root: recursive_outputs.root,
+    };
+    sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
 }

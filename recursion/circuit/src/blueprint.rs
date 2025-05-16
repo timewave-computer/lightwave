@@ -66,7 +66,7 @@ pub fn main() {
         // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
             active_committee: TRUSTED_SYNC_COMMITTEE_HASH,
-            root: state_root.to_vec(),
+            root: state_root.to_vec().try_into().unwrap(),
             height: unpad_block_number(&height),
             vk: inputs.recursive_vk,
         };
@@ -82,7 +82,6 @@ pub fn main() {
                 .recursive_public_values
                 .as_ref()
                 .expect("Previous public values is not provided"),
-            // todo: hardcode this verifying key (must be the Wrapper circuit VK)
             &inputs.recursive_vk,
             groth16_vk,
         )
@@ -119,7 +118,7 @@ pub fn main() {
         // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
             active_committee: next_active_sync_committee,
-            root: state_root.to_vec(),
+            root: state_root.to_vec().try_into().unwrap(),
             height: unpad_block_number(&height),
             vk: inputs.recursive_vk,
         };

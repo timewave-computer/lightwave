@@ -13,19 +13,25 @@ pub struct RecursionCircuitInputs {
 }
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct RecursionCircuitOutputs {
+    // active committee
+    pub active_committee: [u8; 32],
+    // the execution state root
+    pub root: [u8; 32],
+    // the height of the execution block
+    pub height: u64,
+    // the vk that was used to verify the previous recursive proof
+    pub vk: String,
+}
+
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct WrapperCircuitInputs {
     pub recursive_proof: Vec<u8>,
     pub recursive_public_values: Vec<u8>,
 }
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
-pub struct RecursionCircuitOutputs {
-    // active committee
-    pub active_committee: [u8; 32],
-    // the execution state root
-    pub root: Vec<u8>,
-    // the height of the execution block
+pub struct WrapperCircuitOutputs {
     pub height: u64,
-    // the vk that was used to verify the previous recursive proof
-    pub vk: String,
+    pub root: [u8; 32],
 }

@@ -16,7 +16,7 @@ const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [93, 147, 127, 93, 196, 118, 92, 2
 
 // The trusted slot number from which we start our light client chain.
 // This must be a slot where we have verified the sync committee hash.
-const TRUSTED_HEAD: u64 = 11709792;
+const TRUSTED_HEAD: u64 = 11709440;
 const HELIOS_VK: &str = "0x00e8ef401d89cf6c4698607644e75f1871724d56f7374972a6a5b76d3cdaf81e";
 
 pub fn main() {
@@ -66,7 +66,7 @@ pub fn main() {
         // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
             active_committee: TRUSTED_SYNC_COMMITTEE_HASH,
-            root: state_root.to_vec(),
+            root: state_root.to_vec().try_into().unwrap(),
             height: unpad_block_number(&height),
             vk: inputs.recursive_vk,
         };
@@ -82,7 +82,6 @@ pub fn main() {
                 .recursive_public_values
                 .as_ref()
                 .expect("Previous public values is not provided"),
-            // todo: hardcode this verifying key (must be the Wrapper circuit VK)
             &inputs.recursive_vk,
             groth16_vk,
         )
@@ -119,7 +118,7 @@ pub fn main() {
         // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
             active_committee: next_active_sync_committee,
-            root: state_root.to_vec(),
+            root: state_root.to_vec().try_into().unwrap(),
             height: unpad_block_number(&height),
             vk: inputs.recursive_vk,
         };

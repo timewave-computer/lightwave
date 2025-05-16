@@ -25,7 +25,6 @@ pub async fn run_prover_loop(
 ) -> Result<()> {
     let client = ProverClient::new();
     let start_time = Instant::now();
-
     loop {
         // Set up the proving keys and verification keys for all circuits
         let (helios_pk, _) = client.setup(HELIOS_ELF);
