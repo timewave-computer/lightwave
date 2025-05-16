@@ -68,6 +68,7 @@ pub async fn run_prover_loop(
         // Generate the Helios proof
         let helios_proof = {
             let client_guard = client.lock().unwrap();
+            // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&HELIOS_ELF);
             match client_guard
                 .prove(&helios_pk, &stdin)
@@ -125,6 +126,7 @@ pub async fn run_prover_loop(
 
         let recursive_proof = {
             let client_guard = client.lock().unwrap();
+            // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&recursive_elf_clone);
             client_guard
                 .prove(&recursive_pk, &stdin)
@@ -150,6 +152,7 @@ pub async fn run_prover_loop(
         // the final wrapped proof to send to the coprocessor
         let final_wrapped_proof = tokio::task::spawn_blocking(move || {
             let client_guard = client_clone.lock().unwrap();
+            // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&wrapper_elf_clone);
             client_guard
                 .prove(&wrapper_pk_clone, &stdin_clone)
