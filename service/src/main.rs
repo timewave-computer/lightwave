@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
 
     // Get server port from environment or use default
-    let port = std::env::var("API_PORT").unwrap_or_else(|_| "3000".to_string());
+    let port = std::env::var("API_PORT").unwrap_or_else(|_| "7778".to_string());
     let addr = format!("0.0.0.0:{}", port);
 
     // Create router
