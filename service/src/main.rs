@@ -154,7 +154,7 @@ async fn main() -> Result<()> {
 
     // Generate the Wrapper Circuit
     if args.generate_wrapper_circuit {
-        let client = ProverClient::new();
+        let client = ProverClient::from_env();
         let (_, vk) = client.setup(RECURSIVE_ELF_RUNTIME);
         let vk_bytes = vk.bytes32();
 

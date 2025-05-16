@@ -23,7 +23,7 @@ pub async fn run_prover_loop(
     wrapper_elf: Vec<u8>,
     consensus_url: String,
 ) -> Result<()> {
-    let client = ProverClient::new();
+    let client = ProverClient::from_env();
     let start_time = Instant::now();
     loop {
         // Set up the proving keys and verification keys for all circuits
