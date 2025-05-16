@@ -120,14 +120,3 @@ Later we can expose other roots like the beacon header root (default for Helios)
 |--------|-------------|
 | `root` | Execution state root (same as Recursion circuit) |
 | `height` | Execution block height (same as Recursion circuit) |
-
-
-
-
-
-stderr:   left: 0x2a7f7e7548b31c8d3721b1d5975e2dd0e2ff6288d4aefc5bfef86b5f2835df43 
-stderr:  right: [75, 211, 124, 75, 147, 248, 229, 197, 29, 213, 72, 220, 61, 16, 148, 170, 99, 247, 65, 244, 138, 124, 188, 185, 73, 24, 229, 181, 36, 204, 28, 229]
-
-stderr:   left: 0x2a7f7e7548b31c8d3721b1d5975e2dd0e2ff6288d4aefc5bfef86b5f2835df43                                        │
-stderr:  right: [75, 211, 124, 75, 147, 248, 229, 197, 29, 213, 72, 220, 61, 16, 148, 170, 99, 247, 65, 244, 138, 124, 188│
-, 185, 73, 24, 229, 181, 36, 204, 28, 229]
