@@ -4,6 +4,7 @@ use helios_operator::{get_checkpoint, get_client, get_updates};
 use serde_json::Value;
 use sp1_helios_primitives::types::ProofInputs;
 use std::env;
+use tracing::info;
 mod helpers;
 
 /// Type alias for the serialized Helios program inputs
@@ -43,7 +44,7 @@ impl Preprocessor {
         let latest_finalized_slot = get_latest_finalized_slot().await?;
         // we only get a finality update every 32 slots, so we need to wait for the
         // latest finalized slot to be at least 32 slots ahead of the trusted slot
-        println!(
+        info!(
             "latest_finalized_slot: {}, trusted_slot: {}",
             latest_finalized_slot, self.trusted_slot
         );
