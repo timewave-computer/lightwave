@@ -29,18 +29,23 @@ pub async fn run_prover_loop(
     let client = Arc::new(Mutex::new(ProverClient::from_env()));
     let start_time = Instant::now();
     loop {
+        // Clone the ELF files before setup to avoid move issues
+        let helios_elf = HELIOS_ELF.to_vec();
+        let recursive_elf_clone = recursive_elf.clone();
+        let wrapper_elf_clone = wrapper_elf.clone();
+
         // Set up the proving keys and verification keys for all circuits
         let (helios_pk, _) = {
             let client_guard = client.lock().unwrap();
-            client_guard.setup(HELIOS_ELF)
+            client_guard.setup(&helios_elf)
         };
         let (recursive_pk, recursive_vk) = {
             let client_guard = client.lock().unwrap();
-            client_guard.setup(&recursive_elf)
+            client_guard.setup(&recursive_elf_clone)
         };
         let (wrapper_pk, _) = {
             let client_guard = client.lock().unwrap();
-            client_guard.setup(&wrapper_elf)
+            client_guard.setup(&wrapper_elf_clone)
         };
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
@@ -63,6 +68,7 @@ pub async fn run_prover_loop(
         // Generate the Helios proof
         let helios_proof = {
             let client_guard = client.lock().unwrap();
+            let _ = client_guard.setup(&HELIOS_ELF);
             match client_guard
                 .prove(&helios_pk, &stdin)
                 .groth16()
@@ -119,6 +125,7 @@ pub async fn run_prover_loop(
 
         let recursive_proof = {
             let client_guard = client.lock().unwrap();
+            let _ = client_guard.setup(&recursive_elf_clone);
             client_guard
                 .prove(&recursive_pk, &stdin)
                 .groth16()
@@ -143,6 +150,7 @@ pub async fn run_prover_loop(
         // the final wrapped proof to send to the coprocessor
         let final_wrapped_proof = tokio::task::spawn_blocking(move || {
             let client_guard = client_clone.lock().unwrap();
+            let _ = client_guard.setup(&wrapper_elf_clone);
             client_guard
                 .prove(&wrapper_pk_clone, &stdin_clone)
                 .groth16()
