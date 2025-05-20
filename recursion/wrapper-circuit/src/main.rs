@@ -7,7 +7,7 @@ sp1_zkvm::entrypoint!(main);
 use recursion_types::{RecursionCircuitOutputs, WrapperCircuitInputs, WrapperCircuitOutputs};
 use sp1_verifier::Groth16Verifier;
 
-const RECURSIVE_VK: &str = "0x0025442c77a480f040cf00dac4cdff335603d33875db364036c18db6738089d2";
+const RECURSIVE_VK: &str = "0x00a9cc24e405345385e0b3b1eda7fbfa923ce92f127771a5e1b2d5d058ba23ae";
 
 fn main() {
     // Get the Groth16 verification key for proof verification

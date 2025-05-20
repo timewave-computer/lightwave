@@ -65,40 +65,7 @@ pub fn main() {
             TRUSTED_SYNC_COMMITTEE_HASH
         );
 
-        let new_proof_active_committee: [u8; 32] = {
-            // Calculate current epoch from update slot (32 slots per epoch)
-            let new_slot: u64 = helios_output
-                .newHead
-                .try_into()
-                .expect("Failed to fit new slot into u64");
-            let current_epoch = new_slot / 32;
-            // Calculate epochs until next period (assuming 256 epochs per period)
-            let epochs_until_next_period = 256 - (current_epoch % 256);
-
-            if epochs_until_next_period <= EPOCHS_BEFORE_NEXT_PERIOD
-                && helios_output.nextSyncCommitteeHash != [0u8; 32]
-            {
-                helios_output
-                    .nextSyncCommitteeHash
-                    .to_vec()
-                    .try_into()
-                    .expect("Failed to fit nextSyncCommitteeHash into slice")
-            } else {
-                helios_output
-                    .syncCommitteeHash
-                    .to_vec()
-                    .try_into()
-                    .expect("Failed to fit committeeHash into slice")
-            }
-        };
-
-        // Commit the outputs required by the wrapper circuit
-        let outputs = RecursionCircuitOutputs {
-            active_committee: new_proof_active_committee,
-            root: state_root.to_vec().try_into().unwrap(),
-            height: unpad_block_number(&height),
-            vk: inputs.recursive_vk,
-        };
+        let outputs = get_helios_outputs(helios_output, None, &inputs, &state_root, &height);
 
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
     } else {
@@ -106,6 +73,7 @@ pub fn main() {
         Groth16Verifier::verify(
             &inputs
                 .recursive_proof
+                .as_ref()
                 .expect("Previous proof is not provided"),
             &inputs
                 .recursive_public_values
@@ -120,51 +88,18 @@ pub fn main() {
         let recursive_proof_outputs: RecursionCircuitOutputs = borsh::from_slice(
             &inputs
                 .recursive_public_values
+                .as_ref()
                 .expect("Previous public values is not provided"),
         )
         .unwrap();
 
-        let new_proof_active_committee: [u8; 32] = {
-            // Calculate current epoch from update slot (32 slots per epoch)
-            let new_slot: u64 = helios_output
-                .newHead
-                .try_into()
-                .expect("Failed to fit new slot into u64");
-            let current_epoch = new_slot / 32;
-            // Calculate epochs until next period (assuming 256 epochs per period)
-            let epochs_until_next_period = 256 - (current_epoch % 256);
-
-            if epochs_until_next_period <= EPOCHS_BEFORE_NEXT_PERIOD
-                && helios_output.nextSyncCommitteeHash != [0u8; 32]
-            {
-                helios_output
-                    .nextSyncCommitteeHash
-                    .to_vec()
-                    .try_into()
-                    .expect("Failed to fit nextSyncCommitteeHash into slice")
-            } else {
-                helios_output
-                    .syncCommitteeHash
-                    .to_vec()
-                    .try_into()
-                    .expect("Failed to fit committeeHash into slice")
-            }
-        };
-
-        // Assert that the previous committee of the new proof matches the expected active committee
-        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
-            panic!(
-                "[Warning] Sync committee mismatch, we might be at a boundary. Wait for 70 minutes and if this issue does not resolve itself, then there is a bug in the circuit!"
-            );
-        }
-
-        // Commit the outputs required by the wrapper circuit
-        let outputs = RecursionCircuitOutputs {
-            active_committee: new_proof_active_committee,
-            root: state_root.to_vec().try_into().unwrap(),
-            height: unpad_block_number(&height),
-            vk: inputs.recursive_vk,
-        };
+        let outputs = get_helios_outputs(
+            helios_output,
+            Some(recursive_proof_outputs),
+            &inputs,
+            &state_root,
+            &height,
+        );
 
         sp1_zkvm::io::commit_slice(&borsh::to_vec(&outputs).unwrap());
     }
@@ -176,4 +111,60 @@ fn unpad_block_number(padded: &[u8; 32]) -> u64 {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&padded[..8]); // SSZ uses little-endian for uint64
     u64::from_le_bytes(bytes)
+}
+
+fn get_helios_outputs(
+    helios_output: HeliosOutputs,
+    recursive_proof_outputs: Option<RecursionCircuitOutputs>,
+    recursive_proof_inputs: &RecursionCircuitInputs,
+    state_root: &[u8; 32],
+    height: &[u8; 32],
+) -> RecursionCircuitOutputs {
+    let new_proof_active_committee: [u8; 32] = {
+        // Calculate current epoch from update slot (32 slots per epoch)
+        let new_slot: u64 = helios_output
+            .newHead
+            .try_into()
+            .expect("Failed to fit new slot into u64");
+        let current_epoch = new_slot / 32;
+        // Calculate epochs until next period (assuming 256 epochs per period)
+        let epochs_until_next_period = 256 - (current_epoch % 256);
+
+        if epochs_until_next_period <= EPOCHS_BEFORE_NEXT_PERIOD
+            && helios_output.nextSyncCommitteeHash != [0u8; 32]
+        {
+            helios_output
+                .nextSyncCommitteeHash
+                .to_vec()
+                .try_into()
+                .expect("Failed to fit nextSyncCommitteeHash into slice")
+        } else {
+            helios_output
+                .syncCommitteeHash
+                .to_vec()
+                .try_into()
+                .expect("Failed to fit committeeHash into slice")
+        }
+    };
+
+    // Assert that the previous committee of the new proof matches the expected active committee
+    if recursive_proof_outputs.is_some() {
+        if helios_output.prevSyncCommitteeHash
+            != recursive_proof_outputs
+                .expect("Failed to unwrap recursive proof outputs")
+                .active_committee
+        {
+            panic!(
+                "[Warning] Sync committee mismatch, we might be at a boundary. Wait for 70 minutes and if this issue does not resolve itself, then there is a bug in the circuit!"
+            );
+        }
+    }
+
+    // Commit the outputs required by the wrapper circuit
+    RecursionCircuitOutputs {
+        active_committee: new_proof_active_committee,
+        root: state_root.to_vec().try_into().unwrap(),
+        height: unpad_block_number(&height),
+        vk: recursive_proof_inputs.recursive_vk.clone(),
+    }
 }
