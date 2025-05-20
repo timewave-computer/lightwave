@@ -66,11 +66,20 @@ pub fn main() {
             TRUSTED_SYNC_COMMITTEE_HASH
         );
 
-        let new_proof_active_committee: [u8; 32] = helios_output
-            .syncCommitteeHash
-            .to_vec()
-            .try_into()
-            .expect("Failed to fit committeeHash into slice");
+        let new_proof_active_committee: [u8; 32] =
+            if helios_output.nextSyncCommitteeHash != [0u8; 32] {
+                helios_output
+                    .nextSyncCommitteeHash
+                    .to_vec()
+                    .try_into()
+                    .expect("Failed to fit nextSyncCommitteeHash into slice")
+            } else {
+                helios_output
+                    .syncCommitteeHash
+                    .to_vec()
+                    .try_into()
+                    .expect("Failed to fit committeeHash into slice")
+            };
 
         // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
@@ -104,11 +113,20 @@ pub fn main() {
         )
         .unwrap();
 
-        let new_proof_active_committee: [u8; 32] = helios_output
-            .syncCommitteeHash
-            .to_vec()
-            .try_into()
-            .expect("Failed to fit committeeHash into slice");
+        let new_proof_active_committee: [u8; 32] =
+            if helios_output.nextSyncCommitteeHash != [0u8; 32] {
+                helios_output
+                    .nextSyncCommitteeHash
+                    .to_vec()
+                    .try_into()
+                    .expect("Failed to fit nextSyncCommitteeHash into slice")
+            } else {
+                helios_output
+                    .syncCommitteeHash
+                    .to_vec()
+                    .try_into()
+                    .expect("Failed to fit committeeHash into slice")
+            };
 
         // Assert that the previous committee of the new proof matches the expected active committee
         assert_eq!(
