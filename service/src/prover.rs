@@ -7,10 +7,8 @@ use beacon_electra::{
 use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{sync::Arc, time::Instant};
+use tokio::sync::Mutex;
 
 use crate::{
     HELIOS_ELF,
@@ -36,15 +34,15 @@ pub async fn run_prover_loop(
 
         // Set up the proving keys and verification keys for all circuits
         let (helios_pk, _) = {
-            let client_guard = client.lock().unwrap();
+            let client_guard = client.lock().await;
             client_guard.setup(&helios_elf)
         };
         let (recursive_pk, recursive_vk) = {
-            let client_guard = client.lock().unwrap();
+            let client_guard = client.lock().await;
             client_guard.setup(&recursive_elf_clone)
         };
         let (wrapper_pk, _) = {
-            let client_guard = client.lock().unwrap();
+            let client_guard = client.lock().await;
             client_guard.setup(&wrapper_elf_clone)
         };
 
@@ -67,7 +65,7 @@ pub async fn run_prover_loop(
 
         // Generate the Helios proof
         let helios_proof = {
-            let client_guard = client.lock().unwrap();
+            let client_guard = client.lock().await;
             // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&HELIOS_ELF);
             match client_guard
@@ -107,7 +105,7 @@ pub async fn run_prover_loop(
         };
 
         // Get the previous proof if this isn't the first update
-        let previous_proof = service_state.most_recent_recursive_proof;
+        let previous_proof = service_state.most_recent_recursive_proof.clone();
 
         let recursion_inputs = RecursionCircuitInputs {
             electra_body_roots: electra_body_roots,
@@ -125,14 +123,22 @@ pub async fn run_prover_loop(
         stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
         let recursive_proof = {
-            let client_guard = client.lock().unwrap();
+            let client_guard = client.lock().await;
             // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&recursive_elf_clone);
-            client_guard
+            match client_guard
                 .prove(&recursive_pk, &stdin)
                 .groth16()
                 .run()
-                .context("Failed to prove")?
+                .context("Failed to prove")
+            {
+                Ok(proof) => proof,
+                Err(e) => {
+                    println!("Recursive proof failed with error: {:?}", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                    continue;
+                }
+            }
         };
 
         let wrapper_inputs = WrapperCircuitInputs {
@@ -151,7 +157,7 @@ pub async fn run_prover_loop(
 
         // the final wrapped proof to send to the coprocessor
         let final_wrapped_proof = tokio::task::spawn_blocking(move || {
-            let client_guard = client_clone.lock().unwrap();
+            let client_guard = client_clone.blocking_lock();
             // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&wrapper_elf_clone);
             client_guard

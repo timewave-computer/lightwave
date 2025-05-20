@@ -152,10 +152,11 @@ pub fn main() {
         };
 
         // Assert that the previous committee of the new proof matches the expected active committee
-        assert_eq!(
-            helios_output.prevSyncCommitteeHash,
-            recursive_proof_outputs.active_committee
-        );
+        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
+            panic!(
+                "[Warning] Sync committee mismatch, we might be at a boundary. Wait for 70 minutes and if this issue does not resolve itself, then there is a bug in the circuit!"
+            );
+        }
 
         // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
