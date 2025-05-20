@@ -12,12 +12,17 @@ use sp1_verifier::Groth16Verifier;
 
 // The trusted sync committee hash that was active at the trusted slot.
 // This is used to verify the initial state when starting from the trusted slot.
-const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [42, 127, 126, 117, 72, 179, 28, 141, 55, 33, 177, 213, 151, 94, 45, 208, 226, 255, 98, 136, 212, 174, 252, 91, 254, 248, 107, 95, 40, 53, 223, 67];
+const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
+    42, 127, 126, 117, 72, 179, 28, 141, 55, 33, 177, 213, 151, 94, 45, 208, 226, 255, 98, 136,
+    212, 174, 252, 91, 254, 248, 107, 95, 40, 53, 223, 67,
+];
 
 // The trusted slot number from which we start our light client chain.
 // This must be a slot where we have verified the sync committee hash.
 const TRUSTED_HEAD: u64 = 11715392;
 const HELIOS_VK: &str = "0x00e8ef401d89cf6c4698607644e75f1871724d56f7374972a6a5b76d3cdaf81e";
+// Number of epochs before the next period to start using the next sync committee
+const EPOCHS_BEFORE_NEXT_PERIOD: u64 = 10;
 
 pub fn main() {
     // Deserialize the circuit inputs which contain the Helios proof and previous wrapper proof
@@ -63,8 +68,19 @@ pub fn main() {
             TRUSTED_SYNC_COMMITTEE_HASH
         );
 
-        let new_proof_active_committee: [u8; 32] =
-            if helios_output.nextSyncCommitteeHash != [0u8; 32] {
+        let new_proof_active_committee: [u8; 32] = {
+            // Calculate current epoch from update slot (32 slots per epoch)
+            let new_slot: u64 = helios_output
+                .newHead
+                .try_into()
+                .expect("Failed to fit new slot into u64");
+            let current_epoch = new_slot / 32;
+            // Calculate epochs until next period (assuming 256 epochs per period)
+            let epochs_until_next_period = 256 - (current_epoch % 256);
+
+            if epochs_until_next_period <= EPOCHS_BEFORE_NEXT_PERIOD
+                && helios_output.nextSyncCommitteeHash != [0u8; 32]
+            {
                 helios_output
                     .nextSyncCommitteeHash
                     .to_vec()
@@ -76,7 +92,8 @@ pub fn main() {
                     .to_vec()
                     .try_into()
                     .expect("Failed to fit committeeHash into slice")
-            };
+            }
+        };
 
         // Commit the outputs required by the wrapper circuit
         let outputs = RecursionCircuitOutputs {
@@ -110,8 +127,19 @@ pub fn main() {
         )
         .unwrap();
 
-        let new_proof_active_committee: [u8; 32] =
-            if helios_output.nextSyncCommitteeHash != [0u8; 32] {
+        let new_proof_active_committee: [u8; 32] = {
+            // Calculate current epoch from update slot (32 slots per epoch)
+            let new_slot: u64 = helios_output
+                .newHead
+                .try_into()
+                .expect("Failed to fit new slot into u64");
+            let current_epoch = new_slot / 32;
+            // Calculate epochs until next period (assuming 256 epochs per period)
+            let epochs_until_next_period = 256 - (current_epoch % 256);
+
+            if epochs_until_next_period <= EPOCHS_BEFORE_NEXT_PERIOD
+                && helios_output.nextSyncCommitteeHash != [0u8; 32]
+            {
                 helios_output
                     .nextSyncCommitteeHash
                     .to_vec()
@@ -123,7 +151,8 @@ pub fn main() {
                     .to_vec()
                     .try_into()
                     .expect("Failed to fit committeeHash into slice")
-            };
+            }
+        };
 
         // Assert that the previous committee of the new proof matches the expected active committee
         assert_eq!(
