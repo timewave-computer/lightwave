@@ -7,7 +7,10 @@ use beacon_electra::{
 use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
-use std::time::Instant;
+use std::{
+    panic::{AssertUnwindSafe, catch_unwind},
+    time::{Duration, Instant},
+};
 
 use crate::{
     HELIOS_ELF,
@@ -113,22 +116,20 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
-        let recursive_proof = {
-            // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
+        let recursive_proof = match catch_unwind(AssertUnwindSafe(|| {
             let _ = client.setup(&recursive_elf_clone);
-            match client
-                .prove(&recursive_pk, &stdin)
-                .groth16()
-                .run()
-                .context("Failed to prove")
-            {
-                Ok(proof) => proof,
-                Err(e) => {
-                    println!("Recursive proof failed with error: {:?}", e);
-                    drop(client);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                    continue;
-                }
+            client.prove(&recursive_pk, &stdin).groth16().run()
+        })) {
+            Ok(Ok(proof)) => proof,
+            Ok(Err(e)) => {
+                println!("Recursive proof failed gracefully: {:?}", e);
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                continue;
+            }
+            Err(panic_info) => {
+                println!("[PANIC] Recursive proof panicked: {:?}", panic_info);
+                tokio::time::sleep(Duration::from_secs(90)).await;
+                continue;
             }
         };
 
@@ -142,21 +143,20 @@ pub async fn run_prover_loop(
         stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
 
         // the final wrapped proof to send to the coprocessor
-        let final_wrapped_proof = {
-            // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
+        let final_wrapped_proof = match catch_unwind(AssertUnwindSafe(|| {
             let _ = client.setup(&wrapper_elf_clone);
-            match client
-                .prove(&wrapper_pk, &stdin)
-                .groth16()
-                .run()
-                .context("Failed to prove")
-            {
-                Ok(proof) => proof,
-                Err(e) => {
-                    println!("Wrapper proof failed with error: {:?}", e);
-                    drop(client);
-                    return Err(e);
-                }
+            client.prove(&wrapper_pk, &stdin).groth16().run()
+        })) {
+            Ok(Ok(proof)) => proof,
+            Ok(Err(e)) => {
+                println!("Wrapper proof failed gracefully: {:?}", e);
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                continue;
+            }
+            Err(panic_info) => {
+                println!("[PANIC] Wrapper proof panicked: {:?}", panic_info);
+                tokio::time::sleep(Duration::from_secs(90)).await;
+                continue;
             }
         };
 
