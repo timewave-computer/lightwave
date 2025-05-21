@@ -24,9 +24,9 @@ pub async fn run_prover_loop(
     wrapper_elf: Vec<u8>,
     consensus_url: String,
 ) -> Result<()> {
-    let client = Arc::new(Mutex::new(ProverClient::from_env()));
     let start_time = Instant::now();
     loop {
+        let client = Arc::new(Mutex::new(ProverClient::from_env()));
         // Clone the ELF files before setup to avoid move issues
         let helios_elf = HELIOS_ELF.to_vec();
         let recursive_elf_clone = recursive_elf.clone();
@@ -152,32 +152,26 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
 
-        // Clone the Arc for the spawned task
-        let client_clone = Arc::clone(&client);
-        let wrapper_pk_clone = wrapper_pk.clone();
-        let stdin_clone = stdin.clone();
-
         // the final wrapped proof to send to the coprocessor
-        let final_wrapped_proof = tokio::task::spawn_blocking(move || {
-            let client_guard = client_clone.blocking_lock();
+        let final_wrapped_proof = {
+            let client_guard = client.lock().await;
             // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&wrapper_elf_clone);
             match client_guard
-                .prove(&wrapper_pk_clone, &stdin_clone)
+                .prove(&wrapper_pk, &stdin)
                 .groth16()
                 .run()
                 .context("Failed to prove")
             {
-                Ok(proof) => Ok(proof),
+                Ok(proof) => proof,
                 Err(e) => {
                     println!("Wrapper proof failed with error: {:?}", e);
                     // Drop the client guard to release CUDA resources before returning error
                     drop(client_guard);
-                    Err(e)
+                    return Err(e);
                 }
             }
-        })
-        .await??;
+        };
 
         // Decode the recursive proof outputs
         let wrapped_outputs: RecursionCircuitOutputs =
