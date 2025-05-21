@@ -20,6 +20,10 @@ const DEFAULT_TIMEOUT: u64 = 60;
 
 /// Cleans up any existing SP1 GPU containers
 fn cleanup_gpu_containers() -> Result<()> {
+    // First try to stop the container
+    let _ = Command::new("docker").args(["stop", "sp1-gpu"]).output();
+
+    // Then remove it
     let output = Command::new("docker")
         .args(["rm", "-f", "sp1-gpu"])
         .output()
@@ -31,6 +35,22 @@ fn cleanup_gpu_containers() -> Result<()> {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+
+    // Verify the container is actually gone
+    let check = Command::new("docker")
+        .args(["ps", "-a", "--filter", "name=sp1-gpu"])
+        .output()
+        .context("Failed to check container status")?;
+
+    if String::from_utf8_lossy(&check.stdout).contains("sp1-gpu") {
+        println!("Warning: Container still exists after cleanup attempt");
+        // Try one more time with a small delay
+        std::thread::sleep(Duration::from_millis(100));
+        let _ = Command::new("docker")
+            .args(["rm", "-f", "sp1-gpu"])
+            .output();
+    }
+
     Ok(())
 }
 
