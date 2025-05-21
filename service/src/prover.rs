@@ -135,6 +135,8 @@ pub async fn run_prover_loop(
                 Ok(proof) => proof,
                 Err(e) => {
                     println!("Recursive proof failed with error: {:?}", e);
+                    // Drop the client guard to release CUDA resources before sleeping
+                    drop(client_guard);
                     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                     continue;
                 }
@@ -160,11 +162,20 @@ pub async fn run_prover_loop(
             let client_guard = client_clone.blocking_lock();
             // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
             let _ = client_guard.setup(&wrapper_elf_clone);
-            client_guard
+            match client_guard
                 .prove(&wrapper_pk_clone, &stdin_clone)
                 .groth16()
                 .run()
                 .context("Failed to prove")
+            {
+                Ok(proof) => Ok(proof),
+                Err(e) => {
+                    println!("Wrapper proof failed with error: {:?}", e);
+                    // Drop the client guard to release CUDA resources before returning error
+                    drop(client_guard);
+                    Err(e)
+                }
+            }
         })
         .await??;
 
