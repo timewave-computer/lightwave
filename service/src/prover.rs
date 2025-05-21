@@ -8,9 +8,7 @@ use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCi
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
 use std::process::Command;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
 
 use crate::{
     HELIOS_ELF,
@@ -22,10 +20,6 @@ const DEFAULT_TIMEOUT: u64 = 60;
 
 /// Cleans up any existing SP1 GPU containers
 fn cleanup_gpu_containers() -> Result<()> {
-    // First try to stop the container
-    let _ = Command::new("docker").args(["stop", "sp1-gpu"]).output();
-
-    // Then remove it
     let output = Command::new("docker")
         .args(["rm", "-f", "sp1-gpu"])
         .output()
@@ -37,22 +31,6 @@ fn cleanup_gpu_containers() -> Result<()> {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-
-    // Verify the container is actually gone
-    let check = Command::new("docker")
-        .args(["ps", "-a", "--filter", "name=sp1-gpu"])
-        .output()
-        .context("Failed to check container status")?;
-
-    if String::from_utf8_lossy(&check.stdout).contains("sp1-gpu") {
-        println!("Warning: Container still exists after cleanup attempt");
-        // Try one more time with a small delay
-        std::thread::sleep(Duration::from_millis(100));
-        let _ = Command::new("docker")
-            .args(["rm", "-f", "sp1-gpu"])
-            .output();
-    }
-
     Ok(())
 }
 
@@ -65,23 +43,18 @@ pub async fn run_prover_loop(
     consensus_url: String,
 ) -> Result<()> {
     let start_time = Instant::now();
-
-    // Create a single shared client
-    cleanup_gpu_containers()?;
-    let client = Arc::new(Mutex::new(ProverClient::from_env()));
-
     loop {
+        cleanup_gpu_containers()?;
+        let client = ProverClient::from_env();
         let helios_elf = HELIOS_ELF.to_vec();
         let recursive_elf_clone = recursive_elf.clone();
         let wrapper_elf_clone = wrapper_elf.clone();
 
         // Setup all circuits once at the start
-        let client_guard = client.lock().await;
-        let (helios_pk, _) = client_guard.setup(&helios_elf);
-        let (recursive_pk, recursive_vk) = client_guard.setup(&recursive_elf_clone);
-        let (wrapper_pk, _) = client_guard.setup(&wrapper_elf_clone);
-        let _ = client_guard.setup(&helios_elf);
-        drop(client_guard); // Release the lock
+        let (helios_pk, _) = client.setup(&helios_elf);
+        let (recursive_pk, recursive_vk) = client.setup(&recursive_elf_clone);
+        let (wrapper_pk, _) = client.setup(&wrapper_elf_clone);
+        let _ = client.setup(&helios_elf);
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
 
@@ -99,20 +72,17 @@ pub async fn run_prover_loop(
         stdin.write_slice(&inputs);
 
         // Generate Helios proof
-        let helios_proof = {
-            let client_guard = client.lock().await;
-            match client_guard
-                .prove(&helios_pk, &stdin)
-                .groth16()
-                .run()
-                .context("Failed to prove")
-            {
-                Ok(proof) => proof,
-                Err(e) => {
-                    println!("Proof failed with error: {:?}", e);
-                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
-                    continue;
-                }
+        let helios_proof = match client
+            .prove(&helios_pk, &stdin)
+            .groth16()
+            .run()
+            .context("Failed to prove")
+        {
+            Ok(proof) => proof,
+            Err(e) => {
+                println!("Proof failed with error: {:?}", e);
+                tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                continue;
             }
         };
 
@@ -149,53 +119,69 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
-        // Run both recursive and wrapper proofs in a single task
-        let (recursive_proof, final_wrapped_proof) = {
-            let client = client.clone();
+        // Run recursive proof in isolated task
+        let recursive_proof = {
             let recursive_pk_clone = recursive_pk.clone();
-            let wrapper_pk_clone = wrapper_pk.clone();
             let stdin_clone = stdin.clone();
+            cleanup_gpu_containers()?;
+            let client = ProverClient::from_env();
+
+            let _ = client.setup(&recursive_elf);
 
             let handle = tokio::spawn(async move {
-                // Generate recursive proof
-                let recursive_proof = {
-                    let client_guard = client.lock().await;
-                    client_guard
-                        .prove(&recursive_pk_clone, &stdin_clone)
-                        .groth16()
-                        .run()?
-                };
-
-                // Prepare wrapper inputs
-                let wrapper_inputs = WrapperCircuitInputs {
-                    recursive_proof: recursive_proof.bytes(),
-                    recursive_public_values: recursive_proof.public_values.to_vec(),
-                };
-
-                let mut stdin = SP1Stdin::new();
-                stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
-
-                // Generate wrapper proof
-                let wrapper_proof = {
-                    let client_guard = client.lock().await;
-                    client_guard
-                        .prove(&wrapper_pk_clone, &stdin)
-                        .groth16()
-                        .run()?
-                };
-
-                Ok::<_, anyhow::Error>((recursive_proof, wrapper_proof))
+                client
+                    .prove(&recursive_pk_clone, &stdin_clone)
+                    .groth16()
+                    .run()
             });
 
             match handle.await {
-                Ok(Ok(proofs)) => proofs,
+                Ok(Ok(proof)) => proof,
                 Ok(Err(e)) => {
-                    println!("[Handled Error] Proof generation failed: {:?}", e);
+                    println!("[Handled Error] Recursive proof failed: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
                 Err(join_error) => {
-                    println!("[PANIC] Proof task panicked: {:?}", join_error);
+                    println!("[PANIC] Recursive proof task panicked: {:?}", join_error);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
+            }
+        };
+
+        let wrapper_inputs = WrapperCircuitInputs {
+            recursive_proof: recursive_proof.bytes(),
+            recursive_public_values: recursive_proof.public_values.to_vec(),
+        };
+
+        let mut stdin = SP1Stdin::new();
+        stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
+
+        // Run wrapper proof in isolated task
+        let final_wrapped_proof = {
+            let wrapper_pk_clone = wrapper_pk.clone();
+            let stdin_clone = stdin.clone();
+            cleanup_gpu_containers()?;
+            let client = ProverClient::from_env();
+
+            let handle = tokio::spawn(async move {
+                let _ = client.setup(&wrapper_elf_clone);
+                client
+                    .prove(&wrapper_pk_clone, &stdin_clone)
+                    .groth16()
+                    .run()
+            });
+
+            match handle.await {
+                Ok(Ok(proof)) => proof,
+                Ok(Err(e)) => {
+                    println!("[Handled Error] Wrapper proof failed: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
+                Err(join_error) => {
+                    println!("[PANIC] Wrapper proof task panicked: {:?}", join_error);
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
