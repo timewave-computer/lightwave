@@ -8,9 +8,10 @@ use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCi
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
 use std::{
-    panic::{AssertUnwindSafe, catch_unwind},
+    sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Mutex;
 
 use crate::{
     HELIOS_ELF,
@@ -28,27 +29,23 @@ pub async fn run_prover_loop(
 ) -> Result<()> {
     let start_time = Instant::now();
     loop {
-        let client = ProverClient::from_env();
-        // Clone the ELF files before setup to avoid move issues
+        let client = Arc::new(Mutex::new(ProverClient::from_env()));
         let helios_elf = HELIOS_ELF.to_vec();
         let recursive_elf_clone = recursive_elf.clone();
         let wrapper_elf_clone = wrapper_elf.clone();
 
-        // Set up the proving keys and verification keys for all circuits
-        let (helios_pk, _) = client.setup(&helios_elf);
-        let (recursive_pk, recursive_vk) = client.setup(&recursive_elf_clone);
-        let (wrapper_pk, _) = client.setup(&wrapper_elf_clone);
+        let (helios_pk, _) = client.lock().await.setup(&helios_elf);
+        let (recursive_pk, recursive_vk) = client.lock().await.setup(&recursive_elf_clone);
+        let (wrapper_pk, _) = client.lock().await.setup(&wrapper_elf_clone);
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
-        // Initialize the preprocessor with the current trusted slot
-        let preprocessor = Preprocessor::new(service_state.trusted_slot);
 
-        // Get the next block's inputs for proof generation
+        let preprocessor = Preprocessor::new(service_state.trusted_slot);
         let inputs = match preprocessor.run().await {
             Ok(inputs) => inputs,
             Err(e) => {
                 println!("[Warning]: {:?}", e);
-                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                tokio::time::sleep(Duration::from_secs(60)).await;
                 continue;
             }
         };
@@ -56,11 +53,12 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&inputs);
 
-        // Generate the Helios proof
+        // Generate Helios proof
         let helios_proof = {
-            // This is required ONLY when using the GPU prover, because the setup step mutates the ProverClient state
-            let _ = client.setup(&HELIOS_ELF);
+            let _ = client.lock().await.setup(&HELIOS_ELF);
             match client
+                .lock()
+                .await
                 .prove(&helios_pk, &stdin)
                 .groth16()
                 .run()
@@ -69,27 +67,21 @@ pub async fn run_prover_loop(
                 Ok(proof) => proof,
                 Err(e) => {
                     println!("Proof failed with error: {:?}", e);
-                    drop(client);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                    tokio::time::sleep(Duration::from_secs(60)).await;
                     continue;
                 }
             }
         };
 
-        // Decode the Helios proof outputs
         let helios_outputs: HeliosOutputs =
             HeliosOutputs::abi_decode(&helios_proof.public_values.to_vec(), false).unwrap();
 
-        // Fetch additional block data needed for execution payload (state_root, height) verification
         let electra_block =
             get_electra_block(helios_outputs.newHead.try_into()?, &consensus_url).await;
-
-        // Extract and process block data
         let electra_body_roots = extract_electra_block_body(electra_block);
         let beacon_header =
             get_beacon_block_header(helios_outputs.newHead.try_into()?, &consensus_url).await;
 
-        // Construct the zk-friendly Electra block header
         let electra_header = ElectraBlockHeader {
             slot: beacon_header.slot.as_u64(),
             proposer_index: beacon_header.proposer_index,
@@ -98,12 +90,11 @@ pub async fn run_prover_loop(
             body_root: beacon_header.body_root.to_vec().try_into().unwrap(),
         };
 
-        // Get the previous proof if this isn't the first update
         let previous_proof = service_state.most_recent_recursive_proof.clone();
 
         let recursion_inputs = RecursionCircuitInputs {
-            electra_body_roots: electra_body_roots,
-            electra_header: electra_header,
+            electra_body_roots,
+            electra_header,
             helios_proof: helios_proof.bytes(),
             helios_public_values: helios_proof.public_values.to_vec(),
             recursive_proof: previous_proof.as_ref().map(|p| p.bytes()),
@@ -112,22 +103,31 @@ pub async fn run_prover_loop(
             previous_head: service_state.trusted_slot,
         };
 
-        // Generate the recursive proof
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
-        let recursive_proof = match catch_unwind(AssertUnwindSafe(|| {
-            let _ = client.setup(&recursive_elf_clone);
-            client.prove(&recursive_pk, &stdin).groth16().run()
-        })) {
+        let client_clone = Arc::clone(&client);
+        let recursive_pk_clone = recursive_pk.clone();
+        let stdin_clone = stdin.clone();
+
+        let recursive_handle = tokio::spawn(async move {
+            let client = client_clone.lock().await;
+            let _ = client.setup(&recursive_elf_clone.clone());
+            client
+                .prove(&recursive_pk_clone, &stdin_clone)
+                .groth16()
+                .run()
+        });
+
+        let recursive_proof = match recursive_handle.await {
             Ok(Ok(proof)) => proof,
             Ok(Err(e)) => {
-                println!("Recursive proof failed gracefully: {:?}", e);
+                println!("[Handled Error] Recursive proof failed: {:?}", e);
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 continue;
             }
-            Err(panic_info) => {
-                println!("[PANIC] Recursive proof panicked: {:?}", panic_info);
+            Err(join_error) => {
+                println!("[PANIC] Recursive proof task panicked: {:?}", join_error);
                 tokio::time::sleep(Duration::from_secs(90)).await;
                 continue;
             }
@@ -138,48 +138,48 @@ pub async fn run_prover_loop(
             recursive_public_values: recursive_proof.public_values.to_vec(),
         };
 
-        // Generate the recursive proof
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
 
-        // the final wrapped proof to send to the coprocessor
-        let final_wrapped_proof = match catch_unwind(AssertUnwindSafe(|| {
-            let _ = client.setup(&wrapper_elf_clone);
-            client.prove(&wrapper_pk, &stdin).groth16().run()
-        })) {
+        let client_clone = Arc::clone(&client);
+        let wrapper_pk_clone = wrapper_pk.clone();
+        let stdin_clone = stdin.clone();
+
+        let wrapper_handle = tokio::spawn(async move {
+            let client = client_clone.lock().await;
+            let _ = client.setup(&wrapper_elf_clone.clone());
+            client
+                .prove(&wrapper_pk_clone, &stdin_clone)
+                .groth16()
+                .run()
+        });
+
+        let final_wrapped_proof = match wrapper_handle.await {
             Ok(Ok(proof)) => proof,
             Ok(Err(e)) => {
-                println!("Wrapper proof failed gracefully: {:?}", e);
+                println!("[Handled Error] Wrapper proof failed: {:?}", e);
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 continue;
             }
-            Err(panic_info) => {
-                println!("[PANIC] Wrapper proof panicked: {:?}", panic_info);
+            Err(join_error) => {
+                println!("[PANIC] Wrapper proof task panicked: {:?}", join_error);
                 tokio::time::sleep(Duration::from_secs(90)).await;
                 continue;
             }
         };
 
-        // Decode the recursive proof outputs
         let wrapped_outputs: RecursionCircuitOutputs =
             borsh::from_slice(&recursive_proof.public_values.to_vec()).unwrap();
 
-        // Update the service state with new trusted information
         service_state.most_recent_recursive_proof = Some(recursive_proof.clone());
-
-        // this is the proof that should be returned by the API endpoint get_proof
         service_state.most_recent_wrapper_proof = Some(final_wrapped_proof);
         service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
         service_state.trusted_height = wrapped_outputs.height;
         service_state.trusted_root = wrapped_outputs.root.try_into().unwrap();
         service_state.update_counter += 1;
 
-        // Save the updated state to the database
         state_manager.save_state(&service_state)?;
-
-        // Log the updated state and elapsed time
         println!("New Service State: {:?} \n", service_state);
-        let elapsed_time = start_time.elapsed();
-        println!("Alive for: {:?}", elapsed_time);
+        println!("Alive for: {:?}", start_time.elapsed());
     }
 }
