@@ -7,6 +7,7 @@ use beacon_electra::{
 use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -16,6 +17,22 @@ use crate::{
 };
 
 const DEFAULT_TIMEOUT: u64 = 60;
+
+/// Cleans up any existing SP1 GPU containers
+fn cleanup_gpu_containers() -> Result<()> {
+    let output = Command::new("docker")
+        .args(["rm", "-f", "sp1-gpu"])
+        .output()
+        .context("Failed to execute docker command")?;
+
+    if !output.status.success() {
+        println!(
+            "Warning: Failed to remove container: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
 
 /// Runs the main service loop that generates and verifies proofs
 pub async fn run_prover_loop(
@@ -27,6 +44,7 @@ pub async fn run_prover_loop(
 ) -> Result<()> {
     let start_time = Instant::now();
     loop {
+        cleanup_gpu_containers()?;
         let client = ProverClient::from_env();
         let helios_elf = HELIOS_ELF.to_vec();
         let recursive_elf_clone = recursive_elf.clone();
@@ -36,7 +54,6 @@ pub async fn run_prover_loop(
         let (helios_pk, _) = client.setup(&helios_elf);
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf_clone);
         let (wrapper_pk, _) = client.setup(&wrapper_elf_clone);
-
         let _ = client.setup(&helios_elf);
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
@@ -106,6 +123,7 @@ pub async fn run_prover_loop(
         let recursive_proof = {
             let recursive_pk_clone = recursive_pk.clone();
             let stdin_clone = stdin.clone();
+            cleanup_gpu_containers()?;
             let client = ProverClient::from_env();
 
             let _ = client.setup(&recursive_elf);
@@ -144,6 +162,7 @@ pub async fn run_prover_loop(
         let final_wrapped_proof = {
             let wrapper_pk_clone = wrapper_pk.clone();
             let stdin_clone = stdin.clone();
+            cleanup_gpu_containers()?;
             let client = ProverClient::from_env();
 
             let handle = tokio::spawn(async move {
