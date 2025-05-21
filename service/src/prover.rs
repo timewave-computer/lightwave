@@ -19,6 +19,8 @@ use crate::{
     state::{ServiceState, StateManager},
 };
 
+const DEFAULT_TIMEOUT: u64 = 60;
+
 /// Runs the main service loop that generates and verifies proofs
 pub async fn run_prover_loop(
     state_manager: StateManager,
@@ -29,14 +31,15 @@ pub async fn run_prover_loop(
 ) -> Result<()> {
     let start_time = Instant::now();
     loop {
-        let client = Arc::new(Mutex::new(ProverClient::from_env()));
+        let client = ProverClient::from_env();
         let helios_elf = HELIOS_ELF.to_vec();
         let recursive_elf_clone = recursive_elf.clone();
         let wrapper_elf_clone = wrapper_elf.clone();
 
-        let (helios_pk, _) = client.lock().await.setup(&helios_elf);
-        let (recursive_pk, recursive_vk) = client.lock().await.setup(&recursive_elf_clone);
-        let (wrapper_pk, _) = client.lock().await.setup(&wrapper_elf_clone);
+        // Setup all circuits once at the start
+        let (helios_pk, _) = client.setup(&helios_elf);
+        let (recursive_pk, recursive_vk) = client.setup(&recursive_elf_clone);
+        let (wrapper_pk, _) = client.setup(&wrapper_elf_clone);
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
 
@@ -45,7 +48,7 @@ pub async fn run_prover_loop(
             Ok(inputs) => inputs,
             Err(e) => {
                 println!("[Warning]: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                 continue;
             }
         };
@@ -54,22 +57,17 @@ pub async fn run_prover_loop(
         stdin.write_slice(&inputs);
 
         // Generate Helios proof
-        let helios_proof = {
-            let _ = client.lock().await.setup(&HELIOS_ELF);
-            match client
-                .lock()
-                .await
-                .prove(&helios_pk, &stdin)
-                .groth16()
-                .run()
-                .context("Failed to prove")
-            {
-                Ok(proof) => proof,
-                Err(e) => {
-                    println!("Proof failed with error: {:?}", e);
-                    tokio::time::sleep(Duration::from_secs(60)).await;
-                    continue;
-                }
+        let helios_proof = match client
+            .prove(&helios_pk, &stdin)
+            .groth16()
+            .run()
+            .context("Failed to prove")
+        {
+            Ok(proof) => proof,
+            Err(e) => {
+                println!("Proof failed with error: {:?}", e);
+                tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                continue;
             }
         };
 
@@ -106,30 +104,32 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&recursion_inputs).unwrap());
 
-        let client_clone = Arc::clone(&client);
-        let recursive_pk_clone = recursive_pk.clone();
-        let stdin_clone = stdin.clone();
+        // Run recursive proof in isolated task
+        let recursive_proof = {
+            let recursive_pk_clone = recursive_pk.clone();
+            let stdin_clone = stdin.clone();
+            let client = ProverClient::from_env();
 
-        let recursive_handle = tokio::spawn(async move {
-            let client = client_clone.lock().await;
-            let _ = client.setup(&recursive_elf_clone.clone());
-            client
-                .prove(&recursive_pk_clone, &stdin_clone)
-                .groth16()
-                .run()
-        });
+            let handle = tokio::spawn(async move {
+                let _ = client.setup(&recursive_elf_clone);
+                client
+                    .prove(&recursive_pk_clone, &stdin_clone)
+                    .groth16()
+                    .run()
+            });
 
-        let recursive_proof = match recursive_handle.await {
-            Ok(Ok(proof)) => proof,
-            Ok(Err(e)) => {
-                println!("[Handled Error] Recursive proof failed: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(60)).await;
-                continue;
-            }
-            Err(join_error) => {
-                println!("[PANIC] Recursive proof task panicked: {:?}", join_error);
-                tokio::time::sleep(Duration::from_secs(90)).await;
-                continue;
+            match handle.await {
+                Ok(Ok(proof)) => proof,
+                Ok(Err(e)) => {
+                    println!("[Handled Error] Recursive proof failed: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
+                Err(join_error) => {
+                    println!("[PANIC] Recursive proof task panicked: {:?}", join_error);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
             }
         };
 
@@ -141,30 +141,32 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&borsh::to_vec(&wrapper_inputs).unwrap());
 
-        let client_clone = Arc::clone(&client);
-        let wrapper_pk_clone = wrapper_pk.clone();
-        let stdin_clone = stdin.clone();
+        // Run wrapper proof in isolated task
+        let final_wrapped_proof = {
+            let wrapper_pk_clone = wrapper_pk.clone();
+            let stdin_clone = stdin.clone();
+            let client = ProverClient::from_env();
 
-        let wrapper_handle = tokio::spawn(async move {
-            let client = client_clone.lock().await;
-            let _ = client.setup(&wrapper_elf_clone.clone());
-            client
-                .prove(&wrapper_pk_clone, &stdin_clone)
-                .groth16()
-                .run()
-        });
+            let handle = tokio::spawn(async move {
+                let _ = client.setup(&wrapper_elf_clone);
+                client
+                    .prove(&wrapper_pk_clone, &stdin_clone)
+                    .groth16()
+                    .run()
+            });
 
-        let final_wrapped_proof = match wrapper_handle.await {
-            Ok(Ok(proof)) => proof,
-            Ok(Err(e)) => {
-                println!("[Handled Error] Wrapper proof failed: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(60)).await;
-                continue;
-            }
-            Err(join_error) => {
-                println!("[PANIC] Wrapper proof task panicked: {:?}", join_error);
-                tokio::time::sleep(Duration::from_secs(90)).await;
-                continue;
+            match handle.await {
+                Ok(Ok(proof)) => proof,
+                Ok(Err(e)) => {
+                    println!("[Handled Error] Wrapper proof failed: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
+                Err(join_error) => {
+                    println!("[PANIC] Wrapper proof task panicked: {:?}", join_error);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
             }
         };
 
