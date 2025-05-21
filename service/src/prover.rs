@@ -7,11 +7,7 @@ use beacon_electra::{
 use recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs, WrapperCircuitInputs};
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use tokio::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use crate::{
     HELIOS_ELF,
@@ -40,6 +36,8 @@ pub async fn run_prover_loop(
         let (helios_pk, _) = client.setup(&helios_elf);
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf_clone);
         let (wrapper_pk, _) = client.setup(&wrapper_elf_clone);
+
+        let _ = client.setup(&helios_elf);
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
 
@@ -110,8 +108,9 @@ pub async fn run_prover_loop(
             let stdin_clone = stdin.clone();
             let client = ProverClient::from_env();
 
+            let _ = client.setup(&recursive_elf);
+
             let handle = tokio::spawn(async move {
-                let _ = client.setup(&recursive_elf_clone);
                 client
                     .prove(&recursive_pk_clone, &stdin_clone)
                     .groth16()
