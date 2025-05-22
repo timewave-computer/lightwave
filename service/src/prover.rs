@@ -71,18 +71,29 @@ pub async fn run_prover_loop(
         let mut stdin = SP1Stdin::new();
         stdin.write_slice(&inputs);
 
-        // Generate Helios proof
-        let helios_proof = match client
-            .prove(&helios_pk, &stdin)
-            .groth16()
-            .run()
-            .context("Failed to prove")
-        {
-            Ok(proof) => proof,
-            Err(e) => {
-                println!("Proof failed with error: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
-                continue;
+        // Generate Helios proof in isolated task
+        let helios_proof = {
+            let helios_pk_clone = helios_pk.clone();
+            let stdin_clone = stdin.clone();
+            cleanup_gpu_containers()?;
+            let client = ProverClient::from_env();
+
+            let handle = tokio::spawn(async move {
+                client.prove(&helios_pk_clone, &stdin_clone).groth16().run()
+            });
+
+            match handle.await {
+                Ok(Ok(proof)) => proof,
+                Ok(Err(e)) => {
+                    println!("[Handled Error] Helios proof failed: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
+                Err(join_error) => {
+                    println!("[PANIC] Helios proof task panicked: {:?}", join_error);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
             }
         };
 
