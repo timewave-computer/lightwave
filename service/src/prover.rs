@@ -76,6 +76,7 @@ pub async fn run_prover_loop(
             let stdin_clone = stdin.clone();
             cleanup_gpu_containers()?;
             let client = ProverClient::from_env();
+            let _ = client.setup(&helios_elf);
 
             let handle =
                 tokio::spawn(async move { client.prove(&helios_pk, &stdin_clone).groth16().run() });
