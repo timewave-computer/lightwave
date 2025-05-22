@@ -73,14 +73,12 @@ pub async fn run_prover_loop(
 
         // Generate Helios proof in isolated task
         let helios_proof = {
-            let helios_pk_clone = helios_pk.clone();
             let stdin_clone = stdin.clone();
             cleanup_gpu_containers()?;
             let client = ProverClient::from_env();
 
-            let handle = tokio::spawn(async move {
-                client.prove(&helios_pk_clone, &stdin_clone).groth16().run()
-            });
+            let handle =
+                tokio::spawn(async move { client.prove(&helios_pk, &stdin_clone).groth16().run() });
 
             match handle.await {
                 Ok(Ok(proof)) => proof,
