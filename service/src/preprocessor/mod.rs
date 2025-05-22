@@ -48,7 +48,7 @@ impl Preprocessor {
             "latest_finalized_slot: {}, trusted_slot: {}",
             latest_finalized_slot, self.trusted_slot
         );
-        if (latest_finalized_slot / 32) * 32 <= self.trusted_slot {
+        if ((latest_finalized_slot / 32) * 32) + 1 <= self.trusted_slot {
             return Err(anyhow::anyhow!(
                 "Waiting for new slot to be finalized, retry in 60 seconds!"
             ));
