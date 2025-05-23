@@ -53,10 +53,11 @@ pub async fn run_prover_loop(
         // Setup all circuits once at the start
         let (helios_pk, _) = client.setup(&helios_elf);
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf_clone);
-        let (wrapper_pk, _) = client.setup(&wrapper_elf_clone);
+        let (wrapper_pk, wrapper_vk) = client.setup(&wrapper_elf_clone);
         let _ = client.setup(&helios_elf);
 
         println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
+        println!("[Debug] Wrapper VK: {:?}", wrapper_vk.bytes32());
 
         let preprocessor = Preprocessor::new(service_state.trusted_slot);
         let inputs = match preprocessor.run().await {
