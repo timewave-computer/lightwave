@@ -124,30 +124,11 @@ fn get_helios_outputs(
     height: &[u8; 32],
 ) -> RecursionCircuitOutputs {
     let new_proof_active_committee: [u8; 32] = {
-        // Calculate current epoch from update slot (32 slots per epoch)
-        let new_slot: u64 = helios_output
-            .newHead
+        helios_output
+            .syncCommitteeHash
+            .to_vec()
             .try_into()
-            .expect("Failed to fit new slot into u64");
-        let current_epoch = new_slot / 32;
-        // Calculate epochs until next period (assuming 256 epochs per period)
-        let epochs_until_next_period = 256 - (current_epoch % 256);
-
-        if epochs_until_next_period <= EPOCHS_BEFORE_NEXT_PERIOD
-            && helios_output.nextSyncCommitteeHash != [0u8; 32]
-        {
-            helios_output
-                .nextSyncCommitteeHash
-                .to_vec()
-                .try_into()
-                .expect("Failed to fit nextSyncCommitteeHash into slice")
-        } else {
-            helios_output
-                .syncCommitteeHash
-                .to_vec()
-                .try_into()
-                .expect("Failed to fit committeeHash into slice")
-        }
+            .expect("Failed to fit committeeHash into slice")
     };
 
     // Assert that the previous committee of the new proof matches the expected active committee
