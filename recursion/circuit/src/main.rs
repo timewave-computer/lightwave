@@ -21,8 +21,6 @@ const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
 // This must be a slot where we have verified the sync committee hash.
 const TRUSTED_HEAD: u64 = 11715392;
 const HELIOS_VK: &str = "0x00e8ef401d89cf6c4698607644e75f1871724d56f7374972a6a5b76d3cdaf81e";
-// Number of epochs before the next period to start using the next sync committee
-const EPOCHS_BEFORE_NEXT_PERIOD: u64 = 10;
 
 pub fn main() {
     // Deserialize the circuit inputs which contain the Helios proof and previous wrapper proof
