@@ -121,20 +121,12 @@ fn get_helios_outputs(
     state_root: &[u8; 32],
     height: &[u8; 32],
 ) -> RecursionCircuitOutputs {
-    let new_proof_active_committee: [u8; 32] = {
-        helios_output
-            .syncCommitteeHash
-            .to_vec()
-            .try_into()
-            .expect("Failed to fit committeeHash into slice")
-    };
-
     // Assert that the previous committee of the new proof matches the expected active committee
     if recursive_proof_outputs.is_some() {
-        if helios_output.prevSyncCommitteeHash
-            != recursive_proof_outputs
-                .expect("Failed to unwrap recursive proof outputs")
-                .active_committee
+        let recursive_proof_outputs =
+            recursive_proof_outputs.expect("Failed to unwrap recursive proof outputs");
+        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee
+            && helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee
         {
             panic!(
                 "[Warning] Sync committee mismatch, we might be at a boundary. Wait for 70 minutes and if this issue does not resolve itself, then there is a bug in the circuit!"
@@ -144,7 +136,16 @@ fn get_helios_outputs(
 
     // Commit the outputs required by the wrapper circuit
     RecursionCircuitOutputs {
-        active_committee: new_proof_active_committee,
+        active_committee: helios_output
+            .syncCommitteeHash
+            .to_vec()
+            .try_into()
+            .expect("Failed to fit committeeHash into slice"),
+        previous_committee: helios_output
+            .prevSyncCommitteeHash
+            .to_vec()
+            .try_into()
+            .expect("Failed to unwrap recursive proof outputs"),
         root: state_root.to_vec().try_into().unwrap(),
         height: unpad_block_number(&height),
         vk: recursive_proof_inputs.recursive_vk.clone(),

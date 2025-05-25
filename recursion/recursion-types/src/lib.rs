@@ -16,6 +16,8 @@ pub struct RecursionCircuitInputs {
 pub struct RecursionCircuitOutputs {
     // active committee
     pub active_committee: [u8; 32],
+    // previous committee
+    pub previous_committee: [u8; 32],
     // the execution state root
     pub root: [u8; 32],
     // the height of the execution block
