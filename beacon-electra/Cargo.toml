@@ -12,15 +12,16 @@ sha2.workspace = true
 anyhow.workspace = true
 
 consensus-types = { package = "types", git = "https://github.com/sigp/lighthouse", optional = true }
-tokio = { version = "1.40.0", features = ["full"], optional = true }
 tree_hash = { version = "0.8", optional = true }
 tree_hash_derive = { version = "0.8", optional = true }
 lazy_static = { version = "1.5.0", optional = true }
 reqwest = { workspace = true, features = ["json"], optional = true }
 
+[dev-dependencies]
+tokio = { version = "1.40.0", features = ["full"] }
+
 [features]
 no-zkvm = [
-    "dep:tokio",
     "dep:consensus-types",
     "dep:tree_hash",
     "dep:tree_hash_derive",

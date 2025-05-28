@@ -192,56 +192,62 @@ pub fn extract_electra_block_body(
     }
 }
 
-#[cfg(feature = "no-zkvm")]
-#[tokio::test]
-/// Tests the functionality of fetching and processing beacon block bodies
-///
-/// This test verifies that:
-/// 1. We can fetch a beacon block header
-/// 2. We can fetch and process the corresponding block
-/// 3. The computed merkle roots match the expected values
-async fn test_get_beacon_block_body() {
-    use alloc::format;
+#[cfg(all(test, feature = "no-zkvm"))]
+mod tests {
+    use super::*;
+    use consensus_types::{MainnetEthSpec, SignedBeaconBlock};
+    use types::electra::ElectraBlockHeader;
 
-    let beacon_block_header =
-        get_beacon_block_header(7520257, "https://lodestar-sepolia.chainsafe.io").await;
-    // Lodestar Sepolia endpoint
-    let endpoint = format!(
-        "https://lodestar-sepolia.chainsafe.io/eth/v2/beacon/blocks/{}",
-        7520257
-    );
-    // Fetch the latest block
-    let client = reqwest::Client::new();
-    let resp = client
-        .get(endpoint)
-        .send()
-        .await
-        .expect("Request failed")
-        .error_for_status()
-        .expect("Non-200 response");
+    #[tokio::test]
+    /// Tests the functionality of fetching and processing beacon block bodies
+    ///
+    /// This test verifies that:
+    /// 1. We can fetch a beacon block header
+    /// 2. We can fetch and process the corresponding block
+    /// 3. The computed merkle roots match the expected values
+    async fn test_get_beacon_block_body() {
+        use alloc::format;
 
-    let json: serde_json::Value = resp.json().await.expect("Invalid JSON");
-    let block_data = json["data"].clone();
-    let block: SignedBeaconBlock<MainnetEthSpec> =
-        serde_json::from_value(block_data).expect("Deserialization failed");
-    let electra_block = block.as_electra().unwrap();
-    let electra_block_body = extract_electra_block_body(electra_block.clone());
-    let electra_block_body_root = electra_block_body.merkelize();
+        let beacon_block_header =
+            get_beacon_block_header(7520257, "https://lodestar-sepolia.chainsafe.io").await;
+        // Lodestar Sepolia endpoint
+        let endpoint = format!(
+            "https://lodestar-sepolia.chainsafe.io/eth/v2/beacon/blocks/{}",
+            7520257
+        );
+        // Fetch the latest block
+        let client = reqwest::Client::new();
+        let resp = client
+            .get(endpoint)
+            .send()
+            .await
+            .expect("Request failed")
+            .error_for_status()
+            .expect("Non-200 response");
 
-    assert_eq!(
-        electra_block_body_root.to_vec(),
-        beacon_block_header.body_root.to_vec()
-    );
-    let electra_block_header = ElectraBlockHeader {
-        slot: beacon_block_header.slot.as_u64(),
-        proposer_index: beacon_block_header.proposer_index,
-        parent_root: beacon_block_header.parent_root.into(),
-        state_root: beacon_block_header.state_root.into(),
-        body_root: beacon_block_header.body_root.into(),
-    };
-    let beacon_block_header_root = merkleize_header(electra_block_header);
-    assert_eq!(
-        beacon_block_header_root.to_vec(),
-        beacon_block_header.tree_hash_root().to_vec()
-    );
+        let json: serde_json::Value = resp.json().await.expect("Invalid JSON");
+        let block_data = json["data"].clone();
+        let block: SignedBeaconBlock<MainnetEthSpec> =
+            serde_json::from_value(block_data).expect("Deserialization failed");
+        let electra_block = block.as_electra().unwrap();
+        let electra_block_body = extract_electra_block_body(electra_block.clone());
+        let electra_block_body_root = electra_block_body.merkelize();
+
+        assert_eq!(
+            electra_block_body_root.to_vec(),
+            beacon_block_header.body_root.to_vec()
+        );
+        let electra_block_header = ElectraBlockHeader {
+            slot: beacon_block_header.slot.as_u64(),
+            proposer_index: beacon_block_header.proposer_index,
+            parent_root: beacon_block_header.parent_root.into(),
+            state_root: beacon_block_header.state_root.into(),
+            body_root: beacon_block_header.body_root.into(),
+        };
+        let beacon_block_header_root = merkleize_header(electra_block_header);
+        assert_eq!(
+            beacon_block_header_root.to_vec(),
+            beacon_block_header.tree_hash_root().to_vec()
+        );
+    }
 }
