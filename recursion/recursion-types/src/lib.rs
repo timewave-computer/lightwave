@@ -1,3 +1,8 @@
+#![no_std]
+extern crate alloc;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use beacon_electra::types::electra::{ElectraBlockBodyRoots, ElectraBlockHeader};
 use borsh::{BorshDeserialize, BorshSerialize};
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
