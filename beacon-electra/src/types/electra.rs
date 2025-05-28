@@ -1,4 +1,5 @@
 use crate::helpers::merkleize_container;
+use alloc::vec::Vec;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 /// Represents the merkle roots of an Electra block body
@@ -87,7 +88,7 @@ impl ElectraBlockBodyRoots {
     /// The 32-byte merkle root of the block body
     pub fn merkelize(&self) -> [u8; 32] {
         let payload_root = self.payload_roots.merkelize();
-        merkleize_container(vec![
+        merkleize_container(Vec::from([
             self.randao_reveal,
             self.eth1_data,
             self.graffiti,
@@ -101,7 +102,7 @@ impl ElectraBlockBodyRoots {
             self.bls_to_execution_changes,
             self.blob_kzg_commitments,
             self.execution_requests,
-        ])
+        ]))
     }
 }
 
@@ -114,7 +115,7 @@ impl ElectraBlockBodyPayloadRoots {
     /// # Returns
     /// The 32-byte merkle root of the execution payload
     pub fn merkelize(&self) -> [u8; 32] {
-        merkleize_container(vec![
+        merkleize_container(Vec::from([
             self.parent_hash,
             self.fee_recipient,
             self.state_root,
@@ -132,7 +133,7 @@ impl ElectraBlockBodyPayloadRoots {
             self.withdrawals,
             self.blob_gas_used,
             self.excess_blob_gas,
-        ])
+        ]))
     }
 }
 

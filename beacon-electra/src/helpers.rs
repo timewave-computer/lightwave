@@ -1,3 +1,5 @@
+extern crate alloc;
+use alloc::vec::Vec;
 use sha2::{Digest, Sha256};
 
 /// Computes the merkle root of a container of field roots
@@ -18,9 +20,13 @@ pub(crate) fn merkleize_container(field_roots: Vec<[u8; 32]>) -> [u8; 32] {
     let count = field_roots.len();
     let next_pow2 = count.next_power_of_two();
     let mut leaves = field_roots;
-    leaves.extend(vec![[0u8; 32]; next_pow2 - count]);
+    let mut padding = Vec::new();
+    for _ in 0..(next_pow2 - count) {
+        padding.push([0u8; 32]);
+    }
+    leaves.extend(padding);
     while leaves.len() > 1 {
-        let mut next_level = vec![];
+        let mut next_level = Vec::new();
         for i in (0..leaves.len()).step_by(2) {
             let mut hasher = Sha256::new();
             hasher.update(leaves[i]);

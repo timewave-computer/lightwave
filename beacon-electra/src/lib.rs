@@ -1,3 +1,7 @@
+#![no_std]
+extern crate alloc;
+use alloc::vec::Vec;
+
 #[cfg(feature = "no-zkvm")]
 use consensus_types::{BeaconBlockHeader, SignedBeaconBlock};
 #[cfg(feature = "no-zkvm")]
@@ -40,13 +44,14 @@ pub fn merkleize_header(header: ElectraBlockHeader) -> [u8; 32] {
         .copied()
         .pad_using(32, |_| 0u8)
         .collect();
-    merkleize_container(vec![
+
+    merkleize_container(Vec::from([
         slot_padded.try_into().unwrap(),
         proposer_index_padded.try_into().unwrap(),
         header.parent_root,
         header.state_root,
         header.body_root,
-    ])
+    ]))
 }
 
 #[cfg(feature = "no-zkvm")]
@@ -62,6 +67,8 @@ pub fn merkleize_header(header: ElectraBlockHeader) -> [u8; 32] {
 /// # Errors
 /// Returns an error if the request fails or the response cannot be parsed
 pub async fn get_beacon_block_header(slot: u64, url: &str) -> BeaconBlockHeader {
+    use alloc::format;
+
     let client = reqwest::Client::new();
     let url = format!("{}/eth/v1/beacon/headers/{}", url, slot);
     let resp = client
@@ -92,6 +99,8 @@ pub async fn get_beacon_block_header(slot: u64, url: &str) -> BeaconBlockHeader 
 /// # Errors
 /// Returns an error if the request fails or the response cannot be parsed
 pub async fn get_electra_block(slot: u64, url: &str) -> SignedBeaconBlockElectra<MainnetEthSpec> {
+    use alloc::format;
+
     let endpoint = format!("{}/eth/v2/beacon/blocks/{}", url, slot);
     let client = reqwest::Client::new();
     let resp = client
@@ -192,6 +201,8 @@ pub fn extract_electra_block_body(
 /// 2. We can fetch and process the corresponding block
 /// 3. The computed merkle roots match the expected values
 async fn test_get_beacon_block_body() {
+    use alloc::format;
+
     let beacon_block_header =
         get_beacon_block_header(7520257, "https://lodestar-sepolia.chainsafe.io").await;
     // Lodestar Sepolia endpoint
