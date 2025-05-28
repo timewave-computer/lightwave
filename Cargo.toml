@@ -21,7 +21,10 @@ sp1-helios-primitives = { package = "sp1-helios-primitives", git = "https://gith
 
 sha2 = { version = "0.10.8", default-features = false }
 
-tokio = { version = "1.41.1", features = ["full"] }
+tokio = { version = "1.44.2", default-features = false, features = [
+    "macros",
+    "rt",
+] }
 alloy = { version = "0.12.5", features = ["full"] }
 alloy-primitives = { version = "0.8.25", features = ["rlp"] }
 alloy-sol-types = "0.8.15"
