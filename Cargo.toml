@@ -19,26 +19,26 @@ helios-consensus-core = { git = "https://github.com/a16z/helios", tag = "0.8.6" 
 helios-ethereum = { git = "https://github.com/a16z/helios", tag = "0.8.6" }
 sp1-helios-primitives = { package = "sp1-helios-primitives", git = "https://github.com/timewave-computer/sp1-helios", branch = "valence-compat" }
 
+sha2 = { version = "0.10.8", default-features = false }
+
 tokio = { version = "1.41.1", features = ["full"] }
 alloy = { version = "0.12.5", features = ["full"] }
 alloy-primitives = { version = "0.8.25", features = ["rlp"] }
 alloy-sol-types = "0.8.15"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive"], default-features = false }
 serde_cbor = "0.11.2"
 dotenvy = "0.15.7"
-anyhow = "1.0.98"
+anyhow = { version = "1.0.98", default-features = false }
 reqwest = "0.12.15"
-serde_json = "1.0.105"
-itertools = "0.14"
-sha2 = "0.10.8"
-
+serde_json = { version = "1.0.105", default-features = false }
+itertools = { version = "0.14", default-features = false }
 sp1-zkvm = "4.1.7"
 sp1-sdk = { git = "https://github.com/timewave-computer/sp1", branch = "jonas/fix-4.1.7-syscall", features = [
     "native-gnark",
 ] }
 # not a custom branch, just a small deps fix for the release tag 4.1.7
 sp1-verifier = { git = "https://github.com/timewave-computer/sp1", branch = "jonas/fix-4.1.7-syscall" }
-borsh = { version = "1.5.5", features = ["derive"] }
+borsh = { version = "1.5.5", features = ["derive"], default-features = false }
 
 recursion-types = { path = "recursion/recursion-types" }
 beacon-electra = { path = "beacon-electra" }
