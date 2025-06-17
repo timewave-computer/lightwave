@@ -127,12 +127,12 @@ impl StateManager {
         Ok(state)
     }
 
-    pub fn initialize_state(&self, initial_slot: u64) -> Result<ServiceState> {
+    pub fn initialize_state(&self, initial_slot: u64, initial_height: u64) -> Result<ServiceState> {
         let state = ServiceState {
             most_recent_recursive_proof: None,
             most_recent_wrapper_proof: None,
             trusted_slot: initial_slot,
-            trusted_height: 0,
+            trusted_height: initial_height,
             trusted_root: [0; 32],
             update_counter: 0,
         };

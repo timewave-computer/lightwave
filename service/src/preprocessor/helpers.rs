@@ -1,5 +1,7 @@
 use serde_json::Value;
 
+// todo: re-add the test to mod.rs
+#[allow(unused)]
 pub async fn get_execution_block_height_from_slot(
     beacon_node_url: &str,
     slot: u64,

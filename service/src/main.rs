@@ -43,9 +43,17 @@ struct Args {
 
 // Binary artifacts for the various circuits used in the light client
 pub const HELIOS_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-helios-elf");
-pub const RECURSIVE_ELF_RUNTIME: &[u8] = include_elf!("recursion-circuit");
-pub const WRAPPER_ELF_RUNTIME: &[u8] = include_elf!("wrapper-circuit");
-pub const DEFAULT_SLOT: u64 = 11715392;
+pub const TENDERMINT_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-tendermint-elf");
+pub const RECURSIVE_ELF_HELIOS_RUNTIME: &[u8] = include_elf!("helios-recursion-circuit");
+pub const WRAPPER_ELF_HELIOS_RUNTIME: &[u8] = include_elf!("helios-wrapper-circuit");
+pub const RECURSIVE_ELF_TENDERMINT_RUNTIME: &[u8] = include_elf!("tendermint-recursion-circuit");
+pub const WRAPPER_ELF_TENDERMINT_RUNTIME: &[u8] = include_elf!("tendermint-wrapper-circuit");
+pub const HELIOS_TRUSTED_SLOT: u64 = 11715392;
+const TENDERMINT_TRUSTED_HEIGHT: u64 = 31134400;
+const TENDERMINT_TRUSTED_ROOT: [u8; 32] = [
+    133, 197, 217, 208, 182, 161, 40, 102, 214, 74, 216, 44, 87, 164, 134, 95, 150, 222, 115, 170,
+    222, 9, 183, 138, 57, 107, 86, 21, 40, 96, 131, 113,
+];
 
 /// Main entry point for the light client service.
 ///
@@ -70,6 +78,7 @@ async fn main() -> Result<()> {
 
     // Parse command line arguments
     let args = Args::parse();
+    let client = ProverClient::from_env();
 
     // Load environment variables
     dotenvy::dotenv().ok();
@@ -107,23 +116,43 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    let mode = std::env::var("CLIENT_BACKEND").unwrap_or_else(|_| "TENDERMINT".to_string());
+
     let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
     let service_state = match state_manager.load_state()? {
         Some(state) => state,
         None => {
-            // If no state exists, check if we have a specific slot from args, otherwise use DEFAULT_SLOT
-            let initial_slot = args.generate_recursion_circuit.unwrap_or(DEFAULT_SLOT);
-            state_manager.initialize_state(initial_slot)?
+            let state_manager = match mode.as_str() {
+                "TENDERMINT" => state_manager
+                    .initialize_state(TENDERMINT_TRUSTED_HEIGHT, TENDERMINT_TRUSTED_HEIGHT)?,
+                "HELIOS" => {
+                    let trusted_slot = args
+                        .generate_recursion_circuit
+                        .unwrap_or(HELIOS_TRUSTED_SLOT);
+                    state_manager.initialize_state(trusted_slot, 0)?
+                }
+                _ => {
+                    let trusted_slot = args
+                        .generate_recursion_circuit
+                        .unwrap_or(HELIOS_TRUSTED_SLOT);
+                    state_manager.initialize_state(trusted_slot, 0)?
+                }
+            };
+            state_manager
         }
     };
 
     let elfs_path = std::env::var("ELFS_OUT").unwrap_or_else(|_| "elfs/variable".to_string());
-    let recursive_elf_path = Path::new(&elfs_path).join("recursive-elf.bin");
-    let wrapper_elf_path = Path::new(&elfs_path).join("wrapper-elf.bin");
+    let helios_recursive_elf_path = Path::new(&elfs_path).join("helios-recursive-elf.bin");
+    let helios_wrapper_elf_path = Path::new(&elfs_path).join("helios-wrapper-elf.bin");
+    let tendermint_recursive_elf_path = Path::new(&elfs_path).join("tendermint-recursive-elf.bin");
+    let tendermint_wrapper_elf_path = Path::new(&elfs_path).join("tendermint-wrapper-elf.bin");
 
     // Generate the Recursion Circuit
     if args.generate_recursion_circuit.is_some() {
-        let initial_slot = args.generate_recursion_circuit.unwrap_or(DEFAULT_SLOT);
+        let initial_slot = args
+            .generate_recursion_circuit
+            .unwrap_or(HELIOS_TRUSTED_SLOT);
 
         // Initialize the preprocessor with the current trusted slot
         let preprocessor =
@@ -140,12 +169,28 @@ async fn main() -> Result<()> {
             .to_vec();
 
         let committee_hash_formatted = format!("{:?}", trusted_committee_hash);
-        let template = include_str!("../../recursion/circuit/src/blueprint.rs");
+        let template = include_str!("../../sp1-helios/circuit/src/blueprint.rs");
 
+        // Generate the Helios recursive circuit
+        let (_, helios_vk) = client.setup(&HELIOS_ELF);
         let generated_code = template
             .replace("{ committee_hash }", &committee_hash_formatted)
-            .replace("{ trusted_head }", &initial_slot.to_string());
-        write("recursion/circuit/src/main.rs", generated_code)
+            .replace("{ trusted_head }", &initial_slot.to_string())
+            .replace("{ helios_vk }", &helios_vk.bytes32());
+        write("sp1-helios/circuit/src/main.rs", generated_code)
+            .context("Failed to generate recursive circuit from blueprint")?;
+
+        // Generate the Tendermint recursive circuit
+        let template = include_str!("../../sp1-tendermint/circuit/src/blueprint.rs");
+        let (_, tendermint_vk) = client.setup(&TENDERMINT_ELF);
+        let generated_code = template
+            .replace("{ trusted_height }", &TENDERMINT_TRUSTED_HEIGHT.to_string())
+            .replace(
+                "{ trusted_root }",
+                &format!("{:?}", TENDERMINT_TRUSTED_ROOT),
+            )
+            .replace("{ tendermint_vk }", &tendermint_vk.bytes32());
+        write("sp1-tendermint/circuit/src/main.rs", generated_code)
             .context("Failed to generate recursive circuit from blueprint")?;
 
         println!("Recursive circuit generated successfully");
@@ -155,13 +200,26 @@ async fn main() -> Result<()> {
     // Generate the Wrapper Circuit
     if args.generate_wrapper_circuit {
         let client = ProverClient::from_env();
-        let (_, vk) = client.setup(RECURSIVE_ELF_RUNTIME);
-        let vk_bytes = vk.bytes32();
+        let (_, helios_vk) = client.setup(RECURSIVE_ELF_HELIOS_RUNTIME);
+        let helios_vk_bytes = helios_vk.bytes32();
 
-        let template = include_str!("../../recursion/wrapper-circuit/src/blueprint.rs");
-        let generated_code = template.replace("{ recursive_vk }", &format!("\"{}\"", vk_bytes));
+        let (_, tendermint_vk) = client.setup(RECURSIVE_ELF_TENDERMINT_RUNTIME);
+        let tendermint_vk_bytes = tendermint_vk.bytes32();
 
-        write("recursion/wrapper-circuit/src/main.rs", generated_code)
+        let template = include_str!("../../sp1-helios/wrapper-circuit/src/blueprint.rs");
+        let generated_code =
+            template.replace("{ recursive_vk }", &format!("{:?}", helios_vk_bytes));
+
+        // Generate the Helios wrapper circuit
+        write("sp1-helios/wrapper-circuit/src/main.rs", generated_code)
+            .context("Failed to generate wrapper circuit from blueprint")?;
+
+        let template = include_str!("../../sp1-tendermint/wrapper-circuit/src/blueprint.rs");
+
+        // Generate the Tendermint wrapper circuit
+        let generated_code =
+            template.replace("{ recursive_vk }", &format!("{:?}", tendermint_vk_bytes));
+        write("sp1-tendermint/wrapper-circuit/src/main.rs", generated_code)
             .context("Failed to generate wrapper circuit from blueprint")?;
 
         println!("Wrapper circuit generated successfully");
@@ -177,14 +235,31 @@ async fn main() -> Result<()> {
             std::fs::create_dir_all(parent).context("Failed to create ELF directory")?;
         }
 
-        std::fs::write(&recursive_elf_path, RECURSIVE_ELF_RUNTIME).context(format!(
-            "Failed to dump recursive ELF to {}",
-            recursive_elf_path.display()
-        ))?;
-        std::fs::write(&wrapper_elf_path, WRAPPER_ELF_RUNTIME).context(format!(
+        std::fs::write(&helios_recursive_elf_path, RECURSIVE_ELF_HELIOS_RUNTIME).context(
+            format!(
+                "Failed to dump recursive ELF to {}",
+                helios_recursive_elf_path.display()
+            ),
+        )?;
+        std::fs::write(&helios_wrapper_elf_path, WRAPPER_ELF_HELIOS_RUNTIME).context(format!(
             "Failed to dump wrapper ELF to {}",
-            wrapper_elf_path.display()
+            helios_wrapper_elf_path.display()
         ))?;
+
+        std::fs::write(
+            &tendermint_recursive_elf_path,
+            RECURSIVE_ELF_TENDERMINT_RUNTIME,
+        )
+        .context(format!(
+            "Failed to dump recursive ELF to {}",
+            tendermint_recursive_elf_path.display()
+        ))?;
+        std::fs::write(&tendermint_wrapper_elf_path, WRAPPER_ELF_TENDERMINT_RUNTIME).context(
+            format!(
+                "Failed to dump wrapper ELF to {}",
+                tendermint_wrapper_elf_path.display()
+            ),
+        )?;
 
         println!("ELFs dumped successfully");
         return Ok(());
@@ -224,24 +299,47 @@ async fn main() -> Result<()> {
         let _ = shutdown_tx.send(());
     });
 
-    if !recursive_elf_path.exists() {
+    if !helios_recursive_elf_path.exists() {
         println!(
             "Recursive ELF not found at {}, please run with --dump-elfs",
-            recursive_elf_path.display()
+            helios_recursive_elf_path.display()
         );
         return Err(anyhow::anyhow!("Recursive ELF not found"));
     }
 
-    // read bytes of recursive-elf and wrapper-elf
-    let recursive_elf = std::fs::read(&recursive_elf_path).context(format!(
-        "Failed to read recursive elf from {}",
-        recursive_elf_path.display()
-    ))?;
+    let (recursive_elf, wrapper_elf) = match mode.as_str() {
+        "TENDERMINT" => {
+            // read bytes of recursive-elf and wrapper-elf
+            let recursive_elf = std::fs::read(&tendermint_recursive_elf_path).context(format!(
+                "Failed to read recursive elf from {}",
+                tendermint_recursive_elf_path.display()
+            ))?;
 
-    let wrapper_elf = std::fs::read(&wrapper_elf_path).context(format!(
-        "Failed to read wrapper elf from {}",
-        wrapper_elf_path.display()
-    ))?;
+            let wrapper_elf = std::fs::read(&tendermint_wrapper_elf_path).context(format!(
+                "Failed to read wrapper elf from {}",
+                tendermint_wrapper_elf_path.display()
+            ))?;
+
+            (recursive_elf, wrapper_elf)
+        }
+        "HELIOS" => {
+            // read bytes of recursive-elf and wrapper-elf
+            let recursive_elf = std::fs::read(&helios_recursive_elf_path).context(format!(
+                "Failed to read recursive elf from {}",
+                helios_recursive_elf_path.display()
+            ))?;
+
+            let wrapper_elf = std::fs::read(&helios_wrapper_elf_path).context(format!(
+                "Failed to read wrapper elf from {}",
+                helios_wrapper_elf_path.display()
+            ))?;
+
+            (recursive_elf, wrapper_elf)
+        }
+        _ => {
+            panic!("Invalid mode: {:?}", mode);
+        }
+    };
 
     // Start the service loop in a separate task
     let service_handle = tokio::spawn(run_prover_loop(
