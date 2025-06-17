@@ -118,30 +118,6 @@ async fn main() -> Result<()> {
 
     let mode = std::env::var("CLIENT_BACKEND").unwrap_or_else(|_| "TENDERMINT".to_string());
 
-    let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
-    let service_state = match state_manager.load_state()? {
-        Some(state) => state,
-        None => {
-            let state_manager = match mode.as_str() {
-                "TENDERMINT" => state_manager
-                    .initialize_state(TENDERMINT_TRUSTED_HEIGHT, TENDERMINT_TRUSTED_HEIGHT)?,
-                "HELIOS" => {
-                    let trusted_slot = args
-                        .generate_recursion_circuit
-                        .unwrap_or(HELIOS_TRUSTED_SLOT);
-                    state_manager.initialize_state(trusted_slot, 0)?
-                }
-                _ => {
-                    let trusted_slot = args
-                        .generate_recursion_circuit
-                        .unwrap_or(HELIOS_TRUSTED_SLOT);
-                    state_manager.initialize_state(trusted_slot, 0)?
-                }
-            };
-            state_manager
-        }
-    };
-
     let elfs_path = std::env::var("ELFS_OUT").unwrap_or_else(|_| "elfs/variable".to_string());
     let helios_recursive_elf_path = Path::new(&elfs_path).join("helios-recursive-elf.bin");
     let helios_wrapper_elf_path = Path::new(&elfs_path).join("helios-wrapper-elf.bin");
@@ -264,6 +240,30 @@ async fn main() -> Result<()> {
         println!("ELFs dumped successfully");
         return Ok(());
     }
+
+    let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
+    let service_state = match state_manager.load_state()? {
+        Some(state) => state,
+        None => {
+            let state_manager = match mode.as_str() {
+                "TENDERMINT" => state_manager
+                    .initialize_state(TENDERMINT_TRUSTED_HEIGHT, TENDERMINT_TRUSTED_HEIGHT)?,
+                "HELIOS" => {
+                    let trusted_slot = args
+                        .generate_recursion_circuit
+                        .unwrap_or(HELIOS_TRUSTED_SLOT);
+                    state_manager.initialize_state(trusted_slot, 0)?
+                }
+                _ => {
+                    let trusted_slot = args
+                        .generate_recursion_circuit
+                        .unwrap_or(HELIOS_TRUSTED_SLOT);
+                    state_manager.initialize_state(trusted_slot, 0)?
+                }
+            };
+            state_manager
+        }
+    };
 
     // Start the server in a separate task
     let server_handle = tokio::spawn(async move {

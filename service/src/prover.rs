@@ -72,9 +72,10 @@ pub async fn run_prover_loop(
         let (wrapper_pk, wrapper_vk) = client.setup(&wrapper_elf_clone);
         let _ = client.setup(&helios_elf);
 
-        println!("[Debug] Recursive VK: {:?}", recursive_vk.bytes32());
-        println!("[Debug] Wrapper VK: {:?}", wrapper_vk.bytes32());
+        println!("[Prover Loop] Recursive VK: {:?}", recursive_vk.bytes32());
+        println!("[Prover Loop] Wrapper VK: {:?}", wrapper_vk.bytes32());
 
+        println!("[Prover Loop] Step 1/7");
         let recursive_prover = match MODE.as_str() {
             "HELIOS" => {
                 helios_prover(
@@ -88,7 +89,9 @@ pub async fn run_prover_loop(
             "TENDERMINT" => tendermint_prover(&service_state, recursive_vk.bytes32()).await?,
             _ => panic!("Invalid mode: {:?}", MODE.as_str()),
         };
+        println!("[Prover Loop] Running recursive prover");
 
+        println!("[Prover Loop] Step 2/7");
         let mut stdin = SP1Stdin::new();
         match recursive_prover.clone() {
             RecursiveProver::Helios((_, recursion_inputs)) => {
@@ -99,6 +102,7 @@ pub async fn run_prover_loop(
             }
         }
 
+        println!("[Prover Loop] Step 3/7");
         // Run recursive proof in isolated task
         let recursive_proof = {
             let recursive_pk_clone = recursive_pk.clone();
@@ -130,6 +134,7 @@ pub async fn run_prover_loop(
             }
         };
 
+        println!("[Prover Loop] Step 4/7");
         let mut stdin = SP1Stdin::new();
         match recursive_prover {
             RecursiveProver::Helios(_) => {
@@ -148,6 +153,7 @@ pub async fn run_prover_loop(
             }
         }
 
+        println!("[Prover Loop] Step 5/7");
         // Run wrapper proof in isolated task
         let final_wrapped_proof = {
             let wrapper_pk_clone = wrapper_pk.clone();
@@ -178,6 +184,7 @@ pub async fn run_prover_loop(
             }
         };
 
+        println!("[Prover Loop] Step 6/7");
         match recursive_prover {
             RecursiveProver::Helios((helios_outputs, _)) => {
                 let wrapped_outputs: HeliosRecursionCircuitOutputs =
@@ -204,6 +211,7 @@ pub async fn run_prover_loop(
             }
         }
 
+        println!("[Prover Loop] Step 7/7");
         state_manager.save_state(&service_state)?;
         println!("New Service State: {:?} \n", service_state);
         println!("Alive for: {:?}", start_time.elapsed());
@@ -215,6 +223,7 @@ async fn tendermint_prover(
     recursive_vk: String,
 ) -> Result<RecursiveProver> {
     // Generate Helios proof in isolated task
+    println!("[Tendermint] Step 1/2");
     let tendermint_proof = {
         cleanup_gpu_containers()?;
         let tendermint_rpc_client = TendermintRPCClient::default();
@@ -239,6 +248,7 @@ async fn tendermint_prover(
         }
     };
 
+    println!("[Tendermint] Step 2/2");
     let tendermint_outputs: TendermintOutput =
         serde_json::from_slice(&tendermint_proof.public_values.to_vec()).unwrap();
 
@@ -266,6 +276,7 @@ async fn helios_prover(
     consensus_url: &str,
 ) -> Result<RecursiveProver> {
     // Generate Helios proof in isolated task
+    println!("[Helios] Step 1/4");
     let preprocessor = Preprocessor::new(service_state.trusted_slot);
     let inputs = match preprocessor.run().await {
         Ok(inputs) => inputs,
@@ -274,6 +285,7 @@ async fn helios_prover(
         }
     };
 
+    println!("[Helios] Step 2/4");
     let mut stdin = SP1Stdin::new();
     stdin.write_slice(&inputs);
     let helios_proof = {
@@ -299,6 +311,7 @@ async fn helios_prover(
         }
     };
 
+    println!("[Helios] Step 3/4");
     let helios_outputs: HeliosOutputs =
         HeliosOutputs::abi_decode(&helios_proof.public_values.to_vec(), false).unwrap();
 
@@ -315,6 +328,7 @@ async fn helios_prover(
         body_root: beacon_header.body_root.to_vec().try_into().unwrap(),
     };
 
+    println!("[Helios] Step 4/4");
     let previous_proof = service_state.most_recent_recursive_proof.clone();
 
     let recursion_inputs = HeliosRecursionCircuitInputs {

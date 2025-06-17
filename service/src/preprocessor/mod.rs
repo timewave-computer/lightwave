@@ -40,9 +40,13 @@ impl Preprocessor {
     /// 4. Fetches updates and finality data
     /// 5. Serializes everything into the format expected by the Helios program
     pub async fn run(&self) -> Result<HeliosInputSlice> {
+        println!("[Preprocessor] Step 1/6");
+        println!("trusted_slot: {}", self.trusted_slot);
         let checkpoint = get_checkpoint(self.trusted_slot).await?;
+        println!("[Preprocessor] Step 2/6");
         let client = get_client(checkpoint).await?;
         let trusted_slot_period = &self.trusted_slot / 8192;
+        println!("[Preprocessor] Step 3/6");
         let latest_finalized_slot = get_latest_finalized_slot().await?;
         // we only get a finality update every 32 slots, so we need to wait for the
         // latest finalized slot to be at least 32 slots ahead of the trusted slot
@@ -57,13 +61,16 @@ impl Preprocessor {
                 "Waiting for new slot to be finalized, retry in 60 seconds!"
             ));
         }
+        println!("[Preprocessor] Step 4/6");
         let latest_finalized_slot_period = latest_finalized_slot / 8192;
         let mut period_distance = latest_finalized_slot_period - trusted_slot_period;
         if period_distance == 0 {
             // minimum period distance is 1
             period_distance = 1;
         }
+        println!("[Preprocessor] Step 5/6");
         let updates = get_updates(&client, period_distance as u8).await;
+        println!("[Preprocessor] Step 6/6");
         let finality_update = client.rpc.get_finality_update().await.unwrap();
         // Create program inputs
         let expected_current_slot = client.expected_current_slot();
