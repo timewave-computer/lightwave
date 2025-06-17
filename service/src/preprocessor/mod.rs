@@ -69,9 +69,15 @@ impl Preprocessor {
             period_distance = 1;
         }
         println!("[Preprocessor] Step 5/6");
-        let updates = get_updates(&client, period_distance as u8).await;
+        let updates = get_updates(&client, period_distance as u8)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get updates: {}", e))?;
         println!("[Preprocessor] Step 6/6");
-        let finality_update = client.rpc.get_finality_update().await.unwrap();
+        let finality_update = client
+            .rpc
+            .get_finality_update()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get finality update: {}", e))?;
         // Create program inputs
         let expected_current_slot = client.expected_current_slot();
         let inputs = ProofInputs {
