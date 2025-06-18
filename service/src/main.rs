@@ -20,6 +20,9 @@ use tree_hash::TreeHash;
 mod prover;
 use prover::run_prover_loop;
 
+use crate::checkpoints::{HELIOS_TRUSTED_SLOT, TENDERMINT_TRUSTED_HEIGHT, TENDERMINT_TRUSTED_ROOT};
+pub mod checkpoints;
+
 /// Command line arguments for the service
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -48,14 +51,6 @@ pub const RECURSIVE_ELF_HELIOS: &[u8] = include_elf!("helios-recursion-circuit")
 pub const WRAPPER_ELF_HELIOS: &[u8] = include_elf!("helios-wrapper-circuit");
 pub const RECURSIVE_ELF_TENDERMINT: &[u8] = include_elf!("tendermint-recursion-circuit");
 pub const WRAPPER_ELF_TENDERMINT: &[u8] = include_elf!("tendermint-wrapper-circuit");
-
-// Trusted state constants for different consensus mechanisms
-const HELIOS_TRUSTED_SLOT: u64 = 11715392;
-const TENDERMINT_TRUSTED_HEIGHT: u64 = 31134400;
-const TENDERMINT_TRUSTED_ROOT: [u8; 32] = [
-    133, 197, 217, 208, 182, 161, 40, 102, 214, 74, 216, 44, 87, 164, 134, 95, 150, 222, 115, 170,
-    222, 9, 183, 138, 57, 107, 86, 21, 40, 96, 131, 113,
-];
 
 /// Main entry point for the light client service.
 ///
