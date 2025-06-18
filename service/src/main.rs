@@ -131,8 +131,7 @@ async fn main() -> Result<()> {
             .unwrap_or(HELIOS_TRUSTED_SLOT);
 
         // Initialize the preprocessor with the current trusted slot
-        let preprocessor =
-            Preprocessor::new(args.generate_recursion_circuit.expect("Missing Slot"));
+        let preprocessor = Preprocessor::new(initial_slot);
         // Get the next block's inputs for proof generation
         let inputs = preprocessor.run().await?;
 
@@ -148,7 +147,7 @@ async fn main() -> Result<()> {
         let template = include_str!("../../sp1-helios/circuit/src/blueprint.rs");
 
         // Generate the Helios recursive circuit
-        let (_, helios_vk) = client.setup(&HELIOS_ELF);
+        let (_, helios_vk) = client.setup(HELIOS_ELF);
         let generated_code = template
             .replace("{ committee_hash }", &committee_hash_formatted)
             .replace("{ trusted_head }", &initial_slot.to_string())
@@ -158,7 +157,7 @@ async fn main() -> Result<()> {
 
         // Generate the Tendermint recursive circuit
         let template = include_str!("../../sp1-tendermint/circuit/src/blueprint.rs");
-        let (_, tendermint_vk) = client.setup(&TENDERMINT_ELF);
+        let (_, tendermint_vk) = client.setup(TENDERMINT_ELF);
         let generated_code = template
             .replace("{ trusted_height }", &TENDERMINT_TRUSTED_HEIGHT.to_string())
             .replace(
@@ -244,25 +243,22 @@ async fn main() -> Result<()> {
     let state_manager = StateManager::new(Path::new(&db_path))?; // Load or initialize the service state
     let service_state = match state_manager.load_state()? {
         Some(state) => state,
-        None => {
-            let state_manager = match mode.as_str() {
-                "TENDERMINT" => state_manager
-                    .initialize_state(TENDERMINT_TRUSTED_HEIGHT, TENDERMINT_TRUSTED_HEIGHT)?,
-                "HELIOS" => {
-                    let trusted_slot = args
-                        .generate_recursion_circuit
-                        .unwrap_or(HELIOS_TRUSTED_SLOT);
-                    state_manager.initialize_state(trusted_slot, 0)?
-                }
-                _ => {
-                    let trusted_slot = args
-                        .generate_recursion_circuit
-                        .unwrap_or(HELIOS_TRUSTED_SLOT);
-                    state_manager.initialize_state(trusted_slot, 0)?
-                }
-            };
-            state_manager
-        }
+        None => match mode.as_str() {
+            "TENDERMINT" => state_manager
+                .initialize_state(TENDERMINT_TRUSTED_HEIGHT, TENDERMINT_TRUSTED_HEIGHT)?,
+            "HELIOS" => {
+                let trusted_slot = args
+                    .generate_recursion_circuit
+                    .unwrap_or(HELIOS_TRUSTED_SLOT);
+                state_manager.initialize_state(trusted_slot, 0)?
+            }
+            _ => {
+                let trusted_slot = args
+                    .generate_recursion_circuit
+                    .unwrap_or(HELIOS_TRUSTED_SLOT);
+                state_manager.initialize_state(trusted_slot, 0)?
+            }
+        },
     };
 
     // Start the server in a separate task

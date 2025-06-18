@@ -32,7 +32,7 @@ fn main() {
 
     // Verify the recursive proof using Groth16 verification
     Groth16Verifier::verify(
-        &inputs.recursive_proof,
+        inputs.recursive_proof.as_ref(),
         &public_outputs,
         // todo: hardcode this verifying key (must be the Recursive circuit VK)
         RECURSIVE_VK,

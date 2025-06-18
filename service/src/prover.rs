@@ -209,7 +209,7 @@ pub async fn run_prover_loop(
                 service_state.most_recent_wrapper_proof = Some(final_wrapped_proof);
                 service_state.trusted_slot = helios_outputs.newHead.try_into().unwrap();
                 service_state.trusted_height = wrapped_outputs.height;
-                service_state.trusted_root = wrapped_outputs.root.try_into().unwrap();
+                service_state.trusted_root = wrapped_outputs.root;
                 service_state.update_counter += 1;
             }
             RecursiveProver::Tendermint((tendermint_outputs, _)) => {
@@ -219,9 +219,9 @@ pub async fn run_prover_loop(
                 service_state.most_recent_recursive_proof = Some(recursive_proof.clone());
                 service_state.most_recent_wrapper_proof = Some(final_wrapped_proof);
                 // in the case of tendermint, the trusted slot is the target height
-                service_state.trusted_slot = tendermint_outputs.target_height.try_into().unwrap();
+                service_state.trusted_slot = tendermint_outputs.target_height;
                 service_state.trusted_height = wrapped_outputs.height;
-                service_state.trusted_root = wrapped_outputs.root.try_into().unwrap();
+                service_state.trusted_root = wrapped_outputs.root;
                 service_state.update_counter += 1;
             }
         }
@@ -274,7 +274,7 @@ async fn tendermint_prover(
         tendermint_public_values: tendermint_proof.public_values.to_vec(),
         recursive_proof: previous_proof.as_ref().map(|p| p.bytes()),
         recursive_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
-        recursive_vk: recursive_vk,
+        recursive_vk,
         trusted_height: service_state.trusted_height,
     };
 
@@ -307,7 +307,7 @@ async fn helios_prover(
         let stdin_clone = stdin.clone();
         cleanup_gpu_containers()?;
         let client = ProverClient::from_env();
-        let (helios_pk, _) = client.setup(&helios_elf);
+        let (helios_pk, _) = client.setup(helios_elf);
 
         let handle =
             tokio::spawn(async move { client.prove(&helios_pk, &stdin_clone).groth16().run() });
@@ -330,10 +330,10 @@ async fn helios_prover(
     let helios_outputs: HeliosOutputs =
         HeliosOutputs::abi_decode(&helios_proof.public_values.to_vec(), false).unwrap();
 
-    let electra_block = get_electra_block(helios_outputs.newHead.try_into()?, &consensus_url).await;
+    let electra_block = get_electra_block(helios_outputs.newHead.try_into()?, consensus_url).await;
     let electra_body_roots = extract_electra_block_body(electra_block);
     let beacon_header =
-        get_beacon_block_header(helios_outputs.newHead.try_into()?, &consensus_url).await;
+        get_beacon_block_header(helios_outputs.newHead.try_into()?, consensus_url).await;
 
     let electra_header = ElectraBlockHeader {
         slot: beacon_header.slot.as_u64(),
@@ -353,7 +353,7 @@ async fn helios_prover(
         helios_public_values: helios_proof.public_values.to_vec(),
         recursive_proof: previous_proof.as_ref().map(|p| p.bytes()),
         recursive_public_values: previous_proof.as_ref().map(|p| p.public_values.to_vec()),
-        recursive_vk: recursive_vk,
+        recursive_vk,
         previous_head: service_state.trusted_slot,
     };
 

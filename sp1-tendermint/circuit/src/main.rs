@@ -1,5 +1,5 @@
-// This is the main recursion circuit that verifies Helios light client updates and maintains
-// a chain of proofs for state transitions. It verifies both the Helios proof and previous
+// This is the main recursion circuit that verifies Tendermint light client updates and maintains
+// a chain of proofs for state transitions. It verifies both the Tendermint proof and previous
 // wrapper proofs to ensure continuity of the light client state.
 
 #![no_main]
