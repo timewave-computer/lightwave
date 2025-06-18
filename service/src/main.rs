@@ -50,7 +50,7 @@ pub const RECURSIVE_ELF_TENDERMINT: &[u8] = include_elf!("tendermint-recursion-c
 pub const WRAPPER_ELF_TENDERMINT: &[u8] = include_elf!("tendermint-wrapper-circuit");
 
 // Trusted state constants for different consensus mechanisms
-pub const HELIOS_TRUSTED_SLOT: u64 = 11715392;
+const HELIOS_TRUSTED_SLOT: u64 = 11715392;
 const TENDERMINT_TRUSTED_HEIGHT: u64 = 31134400;
 const TENDERMINT_TRUSTED_ROOT: [u8; 32] = [
     133, 197, 217, 208, 182, 161, 40, 102, 214, 74, 216, 44, 87, 164, 134, 95, 150, 222, 115, 170,
