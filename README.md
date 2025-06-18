@@ -5,7 +5,7 @@ of the Ethereum network, committing both the execution block height and state ro
 verified block.
 
 # (Re-)Initialization
-Most ZK Light Clients (Lodestar, Nimbus, ...) don't maintain the full finality proof history for all slots.
+Most Light Clients (Lodestar, Nimbus, ...) don't maintain the full finality proof history for all slots.
 Because of this we have a fallback / re-initialization strategy, that we can use in case our prover goes 
 down for an extended period (25 hours +).
 
