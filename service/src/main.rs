@@ -351,19 +351,16 @@ async fn main() -> Result<()> {
     ));
 
     // Wait for both tasks to conclude
-    tokio::select! {
-        server_result = server_handle => {
-            if let Err(e) = server_result {
-                error!("Server task failed: {}", e);
-                return Err(anyhow::anyhow!("Server task failed: {}", e));
-            }
-        }
-        service_result = service_handle => {
-            if let Err(e) = service_result {
-                error!("Service loop failed: {}", e);
-                return Err(anyhow::anyhow!("Service loop failed: {}", e));
-            }
-        }
+    let (server_result, service_result) = tokio::join!(server_handle, service_handle);
+
+    if let Err(e) = server_result {
+        error!("Server task failed: {}", e);
+        return Err(anyhow::anyhow!("Server task failed: {}", e));
+    }
+
+    if let Err(e) = service_result {
+        error!("Service loop failed: {}", e);
+        return Err(anyhow::anyhow!("Service loop failed: {}", e));
     }
 
     Ok(())

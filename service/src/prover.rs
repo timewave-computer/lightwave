@@ -137,12 +137,12 @@ pub async fn run_prover_loop(
             match handle.await {
                 Ok(Ok(proof)) => proof,
                 Ok(Err(e)) => {
-                    println!("[Handled Error] Recursive proof failed: {:?}", e);
+                    println!("[Error] Recursive proof failed: {}", e);
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
                 Err(join_error) => {
-                    println!("[PANIC] Recursive proof task panicked: {:?}", join_error);
+                    println!("[Error] Recursive proof task failed: {}", join_error);
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
@@ -187,12 +187,12 @@ pub async fn run_prover_loop(
             match handle.await {
                 Ok(Ok(proof)) => proof,
                 Ok(Err(e)) => {
-                    println!("[Handled Error] Wrapper proof failed: {:?}", e);
+                    println!("[Error] Wrapper proof failed: {}", e);
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
                 Err(join_error) => {
-                    println!("[PANIC] Wrapper proof task panicked: {:?}", join_error);
+                    println!("[Error] Wrapper proof task failed: {}", join_error);
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
