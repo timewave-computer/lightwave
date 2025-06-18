@@ -12,7 +12,7 @@ down for an extended period (25 hours +).
 In order to leverage the strategy, run the following sequence of commands:
 
 ```shell
-make build-circuits SLOT=NEW_TRUSTED_SLOT_NUMBER
+make build-circuits
 ```
 
 > [!NOTE]

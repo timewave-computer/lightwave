@@ -30,7 +30,7 @@ struct Args {
 
     /// Initial slot number to start from (only used when initializing new state)
     #[arg(long)]
-    generate_recursion_circuit: Option<u64>,
+    generate_recursion_circuit: bool,
 
     /// Generate the wrapper circuit
     #[arg(long)]
@@ -129,13 +129,9 @@ async fn main() -> Result<()> {
     let tendermint_wrapper_elf_path = Path::new(&elfs_path).join("tendermint-wrapper-elf.bin");
 
     // Generate the Recursion Circuit if requested
-    if args.generate_recursion_circuit.is_some() {
-        let initial_slot = args
-            .generate_recursion_circuit
-            .unwrap_or(HELIOS_TRUSTED_SLOT);
-
+    if args.generate_recursion_circuit {
         // Initialize the preprocessor with the current trusted slot
-        let preprocessor = Preprocessor::new(initial_slot);
+        let preprocessor = Preprocessor::new(HELIOS_TRUSTED_SLOT);
         // Get the next block's inputs for proof generation
         let inputs = preprocessor.run().await?;
 
@@ -154,7 +150,7 @@ async fn main() -> Result<()> {
         let (_, helios_vk) = client.setup(HELIOS_ELF);
         let generated_code = template
             .replace("{ committee_hash }", &committee_hash_formatted)
-            .replace("{ trusted_head }", &initial_slot.to_string())
+            .replace("{ trusted_head }", &HELIOS_TRUSTED_SLOT.to_string())
             .replace("{ helios_vk }", &helios_vk.bytes32());
         write("sp1-helios/circuit/src/main.rs", generated_code)
             .context("Failed to generate recursive circuit from blueprint")?;
@@ -247,18 +243,8 @@ async fn main() -> Result<()> {
         None => match mode.as_str() {
             "TENDERMINT" => state_manager
                 .initialize_state(TENDERMINT_TRUSTED_HEIGHT, TENDERMINT_TRUSTED_HEIGHT)?,
-            "HELIOS" => {
-                let trusted_slot = args
-                    .generate_recursion_circuit
-                    .unwrap_or(HELIOS_TRUSTED_SLOT);
-                state_manager.initialize_state(trusted_slot, 0)?
-            }
-            _ => {
-                let trusted_slot = args
-                    .generate_recursion_circuit
-                    .unwrap_or(HELIOS_TRUSTED_SLOT);
-                state_manager.initialize_state(trusted_slot, 0)?
-            }
+            "HELIOS" => state_manager.initialize_state(HELIOS_TRUSTED_SLOT, 0)?,
+            _ => state_manager.initialize_state(HELIOS_TRUSTED_SLOT, 0)?,
         },
     };
 

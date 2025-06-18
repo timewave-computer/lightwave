@@ -55,7 +55,7 @@ beacon-electra = { path = "beacon-electra" }
 
 # tendermint only
 tendermint-recursion-types = { path = "sp1-tendermint/recursion-types" }
-tendermint-program-types = { package = "program-types", git = "https://github.com/timewave-computer/sp1-tendermint", branch = "valence-compat" }
+sp1-tendermint-primitives = { package = "program-types", git = "https://github.com/timewave-computer/sp1-tendermint", branch = "valence-compat" }
 tendermint-prover = { package = "tendermint-operator", git = "https://github.com/timewave-computer/sp1-tendermint", branch = "valence-compat" }
 
 [patch.crates-io]

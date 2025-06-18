@@ -12,11 +12,11 @@ use helios_recursion_types::{
 use once_cell::sync::Lazy;
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
+use sp1_tendermint_primitives::TendermintOutput;
 use std::cmp::min;
 use std::env;
 use std::process::Command;
 use std::time::{Duration, Instant};
-use tendermint_program_types::TendermintOutput;
 use tendermint_prover::TendermintProver;
 use tendermint_prover::util::TendermintRPCClient;
 use tendermint_recursion_types::{

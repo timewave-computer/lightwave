@@ -4,8 +4,8 @@
 
 #![no_main]
 
+use sp1_tendermint_primitives::TendermintOutput;
 use sp1_verifier::Groth16Verifier;
-use tendermint_program_types::TendermintOutput;
 use tendermint_recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
 sp1_zkvm::entrypoint!(main);
 

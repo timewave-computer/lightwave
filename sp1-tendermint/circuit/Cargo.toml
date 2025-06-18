@@ -9,4 +9,4 @@ sp1-zkvm.workspace = true
 sp1-verifier.workspace = true
 borsh.workspace = true
 tendermint-recursion-types.workspace = true
-tendermint-program-types.workspace = true
+sp1-tendermint-primitives.workspace = true
