@@ -31,13 +31,15 @@ use crate::{
     state::{ServiceState, StateManager},
 };
 
+/// Default timeout in seconds for retry operations
 const DEFAULT_TIMEOUT: u64 = 60;
 
 /// Reads the MODE environment variable once at startup
+/// Determines whether to use HELIOS or TENDERMINT consensus
 pub static MODE: Lazy<String> =
     Lazy::new(|| env::var("CLIENT_BACKEND").unwrap_or_else(|_| "HELIOS".to_string()));
 
-/// Cleans up any existing SP1 GPU containers
+/// Cleans up any existing SP1 GPU containers to prevent conflicts
 fn cleanup_gpu_containers() -> Result<()> {
     let output = Command::new("docker")
         .args(["rm", "-f", "sp1-gpu"])
@@ -45,7 +47,7 @@ fn cleanup_gpu_containers() -> Result<()> {
         .context("Failed to execute docker command")?;
 
     if !output.status.success() {
-        println!(
+        tracing::info!(
             "Warning: Failed to remove container: {}",
             String::from_utf8_lossy(&output.stderr)
         );
@@ -54,6 +56,14 @@ fn cleanup_gpu_containers() -> Result<()> {
 }
 
 /// Runs the main service loop that generates and verifies proofs
+///
+/// This function orchestrates the entire proof generation process:
+/// 1. Sets up prover clients and verification keys
+/// 2. Generates base proofs (Helios or Tendermint)
+/// 3. Generates recursive proofs
+/// 4. Generates wrapper proofs
+/// 5. Updates service state with new trusted information
+/// 6. Saves state and continues the loop
 pub async fn run_prover_loop(
     state_manager: StateManager,
     mut service_state: ServiceState,
@@ -63,20 +73,32 @@ pub async fn run_prover_loop(
 ) -> Result<()> {
     let start_time = Instant::now();
     loop {
+        // Clean up any existing GPU containers
         cleanup_gpu_containers()?;
+
+        // Initialize prover client and load ELF files
         let client = ProverClient::from_env();
         let helios_elf = HELIOS_ELF.to_vec();
         let recursive_elf_clone = recursive_elf.clone();
         let wrapper_elf_clone = wrapper_elf.clone();
 
+        // Set up verification keys for all circuits
         let (recursive_pk, recursive_vk) = client.setup(&recursive_elf_clone);
         let (wrapper_pk, wrapper_vk) = client.setup(&wrapper_elf_clone);
         let _ = client.setup(&helios_elf);
 
-        println!("[Prover Loop] Recursive VK: {:?}", recursive_vk.bytes32());
-        println!("[Prover Loop] Wrapper VK: {:?}", wrapper_vk.bytes32());
+        tracing::info!(
+            proof_type = "recursive",
+            vk = %recursive_vk.bytes32(),
+            "Proof verification key generated"
+        );
+        tracing::info!(
+            proof_type = "wrapper",
+            vk = %wrapper_vk.bytes32(),
+            "Proof verification key generated"
+        );
 
-        println!("[Prover Loop] Step 1/7");
+        // Generate base proof based on selected mode
         let recursive_prover = match MODE.as_str() {
             "HELIOS" => {
                 match helios_prover(
@@ -89,7 +111,11 @@ pub async fn run_prover_loop(
                 {
                     Ok(prover) => prover,
                     Err(e) => {
-                        println!("[Error] Helios prover failed: {}", e);
+                        tracing::warn!(
+                            error = %e,
+                            mode = "HELIOS",
+                            "Prover failed, retrying"
+                        );
                         tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                         continue;
                     }
@@ -98,16 +124,19 @@ pub async fn run_prover_loop(
             "TENDERMINT" => match tendermint_prover(&service_state, recursive_vk.bytes32()).await {
                 Ok(prover) => prover,
                 Err(e) => {
-                    println!("[Error] Tendermint prover failed: {}", e);
+                    tracing::warn!(
+                        error = %e,
+                        mode = "TENDERMINT",
+                        "Prover failed, retrying"
+                    );
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
             },
             _ => panic!("Invalid mode: {:?}", MODE.as_str()),
         };
-        println!("[Prover Loop] Running recursive prover");
 
-        println!("[Prover Loop] Step 2/7");
+        // Prepare inputs for recursive proof generation
         let mut stdin = SP1Stdin::new();
         match recursive_prover.clone() {
             RecursiveProver::Helios((_, recursion_inputs)) => {
@@ -118,8 +147,8 @@ pub async fn run_prover_loop(
             }
         }
 
-        println!("[Prover Loop] Step 3/7");
-        // Run recursive proof in isolated task
+        tracing::info!(proof_type = "recursive", "Generating proof");
+        // Run recursive proof generation in isolated task
         let recursive_proof = {
             let recursive_pk_clone = recursive_pk.clone();
             let stdin_clone = stdin.clone();
@@ -138,19 +167,28 @@ pub async fn run_prover_loop(
             match handle.await {
                 Ok(Ok(proof)) => proof,
                 Ok(Err(e)) => {
-                    println!("[Error] Recursive proof failed: {}", e);
+                    tracing::error!(
+                        error = %e,
+                        proof_type = "recursive",
+                        "Proof generation failed"
+                    );
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
                 Err(join_error) => {
-                    println!("[Error] Recursive proof task failed: {}", join_error);
+                    tracing::error!(
+                        error = %join_error,
+                        proof_type = "recursive",
+                        "Proof task failed"
+                    );
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
             }
         };
+        tracing::info!(proof_type = "recursive", "Proof generated successfully");
 
-        println!("[Prover Loop] Step 4/7");
+        // Prepare inputs for wrapper proof generation
         let mut stdin = SP1Stdin::new();
         match recursive_prover {
             RecursiveProver::Helios(_) => {
@@ -169,8 +207,8 @@ pub async fn run_prover_loop(
             }
         }
 
-        println!("[Prover Loop] Step 5/7");
-        // Run wrapper proof in isolated task
+        tracing::info!(proof_type = "wrapper", "Generating proof");
+        // Run wrapper proof generation in isolated task
         let final_wrapped_proof = {
             let wrapper_pk_clone = wrapper_pk.clone();
             let stdin_clone = stdin.clone();
@@ -184,23 +222,32 @@ pub async fn run_prover_loop(
                     .groth16()
                     .run()
             });
+            tracing::info!(proof_type = "wrapper", "Proof generated successfully");
 
             match handle.await {
                 Ok(Ok(proof)) => proof,
                 Ok(Err(e)) => {
-                    println!("[Error] Wrapper proof failed: {}", e);
+                    tracing::error!(
+                        error = %e,
+                        proof_type = "wrapper",
+                        "Proof generation failed"
+                    );
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
                 Err(join_error) => {
-                    println!("[Error] Wrapper proof task failed: {}", join_error);
+                    tracing::error!(
+                        error = %join_error,
+                        proof_type = "wrapper",
+                        "Proof task failed"
+                    );
                     tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
                     continue;
                 }
             }
         };
 
-        println!("[Prover Loop] Step 6/7");
+        // Update service state with new trusted information
         match recursive_prover {
             RecursiveProver::Helios((helios_outputs, _)) => {
                 let wrapped_outputs: HeliosRecursionCircuitOutputs =
@@ -219,7 +266,7 @@ pub async fn run_prover_loop(
                         .expect("Failed to decode Tendermint outputs");
                 service_state.most_recent_recursive_proof = Some(recursive_proof.clone());
                 service_state.most_recent_wrapper_proof = Some(final_wrapped_proof);
-                // in the case of tendermint, the trusted slot is the target height
+                // In the case of Tendermint, the trusted slot is the target height
                 service_state.trusted_slot = tendermint_outputs.target_height;
                 service_state.trusted_height = wrapped_outputs.height;
                 service_state.trusted_root = wrapped_outputs.root;
@@ -227,33 +274,55 @@ pub async fn run_prover_loop(
             }
         }
 
-        println!("[Prover Loop] Step 7/7");
+        // Save updated state to persistent storage
+        tracing::info!("Saving service state");
         state_manager.save_state(&service_state)?;
-        println!("New Service State: {:?} \n", service_state);
-        println!("Alive for: {:?}", start_time.elapsed());
+        tracing::info!(
+            root = %format!("{:?}", service_state.trusted_root),
+            slot = service_state.trusted_slot,
+            height = service_state.trusted_height,
+            "Service state updated"
+        );
+        tracing::info!(
+            uptime = ?start_time.elapsed(),
+            "Service status"
+        );
     }
 }
 
+/// Generates a Tendermint proof and prepares recursive circuit inputs
+///
+/// This function:
+/// 1. Connects to Tendermint RPC to get latest block information
+/// 2. Generates a Tendermint proof for the target block range
+/// 3. Prepares inputs for the recursive circuit
 async fn tendermint_prover(
     service_state: &ServiceState,
     recursive_vk: String,
 ) -> Result<RecursiveProver> {
     dotenvy::dotenv().ok();
-    // Generate Helios proof in isolated task
-    println!("[Tendermint] Step 1/2");
+
+    tracing::info!("Generating Tendermint proof");
     let tendermint_proof = {
         cleanup_gpu_containers()?;
+
+        // Get expiration limit from environment
         let tendermint_expiration_limit = std::env::var("TENDERMINT_EXPIRATION_LIMIT")
             .unwrap_or_else(|_| "100000".to_string())
             .parse::<u64>()
             .unwrap_or(100_000);
+
         let tendermint_rpc_client = TendermintRPCClient::default();
         let tendermint_height = tendermint_rpc_client.get_latest_block_height().await;
         let tendermint_prover = TendermintProver::new();
+
+        // Calculate target height with expiration limit
         let target_height = min(
             tendermint_height,
             service_state.trusted_height + tendermint_expiration_limit,
         );
+
+        // Get light blocks for proof generation
         let (trusted_light_block, target_light_block) = tendermint_rpc_client
             .get_light_blocks(service_state.trusted_height, target_height)
             .await;
@@ -272,13 +341,15 @@ async fn tendermint_prover(
             }
         }
     };
+    tracing::info!("Tendermint proof generated");
 
-    println!("[Tendermint] Step 2/2");
+    // Decode proof outputs
     let tendermint_outputs: TendermintOutput =
         serde_json::from_slice(&tendermint_proof.public_values.to_vec()).unwrap();
 
     let previous_proof = service_state.most_recent_recursive_proof.clone();
 
+    // Prepare recursive circuit inputs
     let recursion_inputs = TendermintRecursionCircuitInputs {
         tendermint_proof: tendermint_proof.bytes(),
         tendermint_public_values: tendermint_proof.public_values.to_vec(),
@@ -294,25 +365,35 @@ async fn tendermint_prover(
     )))
 }
 
+/// Generates a Helios proof and prepares recursive circuit inputs
+///
+/// This function:
+/// 1. Runs the Helios preprocessor to get block data
+/// 2. Generates a Helios proof for the target slot
+/// 3. Fetches Electra block information from consensus layer
+/// 4. Prepares inputs for the recursive circuit
 async fn helios_prover(
     helios_elf: &[u8],
     recursive_vk: String,
     service_state: &ServiceState,
     consensus_url: &str,
 ) -> Result<RecursiveProver> {
-    // Generate Helios proof in isolated task
-    println!("[Helios] Step 1/4");
+    // Run Helios preprocessor to get block inputs
+    tracing::info!("Running Helios preprocessor");
     let preprocessor = Preprocessor::new(service_state.trusted_slot);
     let inputs = match preprocessor.run().await {
         Ok(inputs) => inputs,
         Err(e) => {
-            return Err(anyhow::anyhow!("Helios proof task panicked: {:?}", e));
+            return Err(anyhow::anyhow!("Helios preprocessor failed: {:?}", e));
         }
     };
+    tracing::info!("Helios preprocessor concluded");
 
-    println!("[Helios] Step 2/4");
+    // Prepare inputs for Helios proof generation
     let mut stdin = SP1Stdin::new();
     stdin.write_slice(&inputs);
+
+    tracing::info!("Generating Helios proof");
     let helios_proof = {
         let stdin_clone = stdin.clone();
         cleanup_gpu_containers()?;
@@ -325,26 +406,28 @@ async fn helios_prover(
         match handle.await {
             Ok(Ok(proof)) => proof,
             Ok(Err(e)) => {
-                return Err(anyhow::anyhow!("Helios proof task panicked: {:?}", e));
+                return Err(anyhow::anyhow!("{:?}", e));
             }
             Err(join_error) => {
-                return Err(anyhow::anyhow!(
-                    "Helios proof task panicked: {:?}",
-                    join_error
-                ));
+                return Err(anyhow::anyhow!("{:?}", join_error));
             }
         }
     };
+    tracing::info!("Helios proof generated");
 
-    println!("[Helios] Step 3/4");
+    // Decode proof outputs
     let helios_outputs: HeliosOutputs =
         HeliosOutputs::abi_decode(&helios_proof.public_values.to_vec(), false).unwrap();
 
+    // Fetch Electra block information from consensus layer
+    tracing::info!("Getting electra block");
     let electra_block = get_electra_block(helios_outputs.newHead.try_into()?, consensus_url).await;
     let electra_body_roots = extract_electra_block_body(electra_block);
     let beacon_header =
         get_beacon_block_header(helios_outputs.newHead.try_into()?, consensus_url).await;
+    tracing::info!("Electra block retrieved");
 
+    // Create Electra block header
     let electra_header = ElectraBlockHeader {
         slot: beacon_header.slot.as_u64(),
         proposer_index: beacon_header.proposer_index,
@@ -353,9 +436,9 @@ async fn helios_prover(
         body_root: beacon_header.body_root.to_vec().try_into().unwrap(),
     };
 
-    println!("[Helios] Step 4/4");
     let previous_proof = service_state.most_recent_recursive_proof.clone();
 
+    // Prepare recursive circuit inputs
     let recursion_inputs = HeliosRecursionCircuitInputs {
         electra_body_roots,
         electra_header,
@@ -370,6 +453,10 @@ async fn helios_prover(
     Ok(RecursiveProver::Helios((helios_outputs, recursion_inputs)))
 }
 
+/// Enum representing different types of recursive provers
+///
+/// This allows the main loop to handle both Helios and Tendermint
+/// consensus mechanisms with a unified interface.
 #[derive(Clone)]
 enum RecursiveProver {
     Helios((HeliosOutputs, HeliosRecursionCircuitInputs)),
