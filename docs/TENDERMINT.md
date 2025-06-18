@@ -12,7 +12,7 @@ down for an extended period.
 In order to leverage the strategy, run the following sequence of commands:
 
 ```shell
-make build-circuits HEIGHT=NEW_TRUSTED_HEIGHT_NUMBER
+make build-circuits
 ```
 
 > [!NOTE]

@@ -12,6 +12,7 @@ use helios_recursion_types::{
 use once_cell::sync::Lazy;
 use sp1_helios_primitives::types::ProofOutputs as HeliosOutputs;
 use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
+use std::cmp::min;
 use std::env;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -237,15 +238,24 @@ async fn tendermint_prover(
     service_state: &ServiceState,
     recursive_vk: String,
 ) -> Result<RecursiveProver> {
+    dotenvy::dotenv().ok();
     // Generate Helios proof in isolated task
     println!("[Tendermint] Step 1/2");
     let tendermint_proof = {
         cleanup_gpu_containers()?;
+        let tendermint_expiration_limit = std::env::var("TENDERMINT_EXPIRATION_LIMIT")
+            .unwrap_or_else(|_| "100000".to_string())
+            .parse::<u64>()
+            .unwrap_or(100_000);
         let tendermint_rpc_client = TendermintRPCClient::default();
         let tendermint_height = tendermint_rpc_client.get_latest_block_height().await;
         let tendermint_prover = TendermintProver::new();
+        let target_height = min(
+            tendermint_height,
+            service_state.trusted_height + tendermint_expiration_limit,
+        );
         let (trusted_light_block, target_light_block) = tendermint_rpc_client
-            .get_light_blocks(service_state.trusted_height, tendermint_height)
+            .get_light_blocks(service_state.trusted_height, target_height)
             .await;
 
         let handle = tokio::spawn(async move {

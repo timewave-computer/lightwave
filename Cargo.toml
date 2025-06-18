@@ -15,18 +15,26 @@ resolver = "2"
 opt-level = 3
 
 [workspace.dependencies]
-# Helios ZK Light Client Dependencies
-helios-program = { package = "sp1-helios-program", git = "https://github.com/succinctlabs/sp1-helios", rev = "c9e81c8e48dec1e65e2de9fac6aed3a2cda6911e" }
-helios-operator = { package = "sp1-helios-script", git = "https://github.com/succinctlabs/sp1-helios", rev = "c9e81c8e48dec1e65e2de9fac6aed3a2cda6911e" }
-helios-consensus-core = { git = "https://github.com/a16z/helios", tag = "0.8.6" }
-helios-ethereum = { git = "https://github.com/a16z/helios", tag = "0.8.6" }
-sp1-helios-primitives = { package = "sp1-helios-primitives", git = "https://github.com/succinctlabs/sp1-helios", rev = "c9e81c8e48dec1e65e2de9fac6aed3a2cda6911e" }
-
 sha2 = { version = "0.10.8", default-features = false }
+dotenvy = "0.15.7"
+anyhow = { version = "1.0.98", default-features = false }
+reqwest = "0.12.15"
 tokio = { version = "1.44.2", default-features = false, features = [
     "macros",
     "rt",
 ] }
+serde = { version = "1", features = ["derive"], default-features = false }
+serde_cbor = "0.11.2"
+serde_json = { version = "1.0.105", features = [
+    "alloc",
+], default-features = false }
+borsh = { version = "1.5.5", features = ["derive"], default-features = false }
+itertools = { version = "0.14", default-features = false }
+sp1-zkvm = "5.0.0"
+sp1-sdk = { version = "5.0.0", features = ["native-gnark"] }
+sp1-verifier = "5.0.0"
+
+# alloy
 alloy = { version = "0.12.5", features = ["full"] }
 alloy-primitives = { version = "0.8.15", features = ["rlp"] }
 alloy-sol-types = "0.8.15"
@@ -35,24 +43,18 @@ alloy-rlp = { version = "0.3.9", default-features = false, features = [
     "derive",
     "arrayvec",
 ] }
-serde = { version = "1", features = ["derive"], default-features = false }
-serde_cbor = "0.11.2"
-dotenvy = "0.15.7"
-anyhow = { version = "1.0.98", default-features = false }
-reqwest = "0.12.15"
-serde_json = { version = "1.0.105", features = [
-    "alloc",
-], default-features = false }
-itertools = { version = "0.14", default-features = false }
-sp1-zkvm = "5.0.0"
-sp1-sdk = { version = "5.0.0", features = ["native-gnark"] }
-sp1-verifier = "5.0.0"
-borsh = { version = "1.5.5", features = ["derive"], default-features = false }
 
+# helios only
+helios-program = { package = "sp1-helios-program", git = "https://github.com/succinctlabs/sp1-helios", rev = "c9e81c8e48dec1e65e2de9fac6aed3a2cda6911e" }
+helios-operator = { package = "sp1-helios-script", git = "https://github.com/succinctlabs/sp1-helios", rev = "c9e81c8e48dec1e65e2de9fac6aed3a2cda6911e" }
+helios-consensus-core = { git = "https://github.com/a16z/helios", tag = "0.8.6" }
+helios-ethereum = { git = "https://github.com/a16z/helios", tag = "0.8.6" }
+sp1-helios-primitives = { package = "sp1-helios-primitives", git = "https://github.com/succinctlabs/sp1-helios", rev = "c9e81c8e48dec1e65e2de9fac6aed3a2cda6911e" }
 helios-recursion-types = { path = "sp1-helios/recursion-types" }
-tendermint-recursion-types = { path = "sp1-tendermint/recursion-types" }
 beacon-electra = { path = "beacon-electra" }
 
+# tendermint only
+tendermint-recursion-types = { path = "sp1-tendermint/recursion-types" }
 tendermint-program-types = { package = "program-types", git = "https://github.com/timewave-computer/sp1-tendermint", branch = "valence-compat" }
 tendermint-prover = { package = "tendermint-operator", git = "https://github.com/timewave-computer/sp1-tendermint", branch = "valence-compat" }
 

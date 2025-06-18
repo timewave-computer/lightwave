@@ -38,3 +38,8 @@ once_cell = "1.19"
 
 [build-dependencies]
 sp1-build = "5.0.0"
+
+[features]
+default = ["helios"]
+helios = []
+tendermint = []

@@ -94,9 +94,6 @@ async fn main() -> Result<()> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let app = app.into_make_service();
 
-    // Load environment variables and initialize the prover client
-    dotenvy::dotenv().ok();
-
     let consensus_url = std::env::var("SOURCE_CONSENSUS_RPC_URL").unwrap_or_default();
 
     let db_path =
