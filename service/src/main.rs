@@ -44,10 +44,10 @@ struct Args {
 // Binary artifacts for the various circuits used in the light client
 pub const HELIOS_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-helios-elf");
 pub const TENDERMINT_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-tendermint-elf");
-pub const RECURSIVE_ELF_HELIOS_RUNTIME: &[u8] = include_elf!("helios-recursion-circuit");
-pub const WRAPPER_ELF_HELIOS_RUNTIME: &[u8] = include_elf!("helios-wrapper-circuit");
-pub const RECURSIVE_ELF_TENDERMINT_RUNTIME: &[u8] = include_elf!("tendermint-recursion-circuit");
-pub const WRAPPER_ELF_TENDERMINT_RUNTIME: &[u8] = include_elf!("tendermint-wrapper-circuit");
+pub const RECURSIVE_ELF_HELIOS: &[u8] = include_elf!("helios-recursion-circuit");
+pub const WRAPPER_ELF_HELIOS: &[u8] = include_elf!("helios-wrapper-circuit");
+pub const RECURSIVE_ELF_TENDERMINT: &[u8] = include_elf!("tendermint-recursion-circuit");
+pub const WRAPPER_ELF_TENDERMINT: &[u8] = include_elf!("tendermint-wrapper-circuit");
 pub const HELIOS_TRUSTED_SLOT: u64 = 11715392;
 const TENDERMINT_TRUSTED_HEIGHT: u64 = 31134400;
 const TENDERMINT_TRUSTED_ROOT: [u8; 32] = [
@@ -175,10 +175,10 @@ async fn main() -> Result<()> {
     // Generate the Wrapper Circuit
     if args.generate_wrapper_circuit {
         let client = ProverClient::from_env();
-        let (_, helios_vk) = client.setup(RECURSIVE_ELF_HELIOS_RUNTIME);
+        let (_, helios_vk) = client.setup(RECURSIVE_ELF_HELIOS);
         let helios_vk_bytes = helios_vk.bytes32();
 
-        let (_, tendermint_vk) = client.setup(RECURSIVE_ELF_TENDERMINT_RUNTIME);
+        let (_, tendermint_vk) = client.setup(RECURSIVE_ELF_TENDERMINT);
         let tendermint_vk_bytes = tendermint_vk.bytes32();
 
         let template = include_str!("../../sp1-helios/wrapper-circuit/src/blueprint.rs");
@@ -210,31 +210,25 @@ async fn main() -> Result<()> {
             std::fs::create_dir_all(parent).context("Failed to create ELF directory")?;
         }
 
-        std::fs::write(&helios_recursive_elf_path, RECURSIVE_ELF_HELIOS_RUNTIME).context(
-            format!(
-                "Failed to dump recursive ELF to {}",
-                helios_recursive_elf_path.display()
-            ),
-        )?;
-        std::fs::write(&helios_wrapper_elf_path, WRAPPER_ELF_HELIOS_RUNTIME).context(format!(
+        std::fs::write(&helios_recursive_elf_path, RECURSIVE_ELF_HELIOS).context(format!(
+            "Failed to dump recursive ELF to {}",
+            helios_recursive_elf_path.display()
+        ))?;
+        std::fs::write(&helios_wrapper_elf_path, WRAPPER_ELF_HELIOS).context(format!(
             "Failed to dump wrapper ELF to {}",
             helios_wrapper_elf_path.display()
         ))?;
 
-        std::fs::write(
-            &tendermint_recursive_elf_path,
-            RECURSIVE_ELF_TENDERMINT_RUNTIME,
-        )
-        .context(format!(
-            "Failed to dump recursive ELF to {}",
-            tendermint_recursive_elf_path.display()
-        ))?;
-        std::fs::write(&tendermint_wrapper_elf_path, WRAPPER_ELF_TENDERMINT_RUNTIME).context(
+        std::fs::write(&tendermint_recursive_elf_path, RECURSIVE_ELF_TENDERMINT).context(
             format!(
-                "Failed to dump wrapper ELF to {}",
-                tendermint_wrapper_elf_path.display()
+                "Failed to dump recursive ELF to {}",
+                tendermint_recursive_elf_path.display()
             ),
         )?;
+        std::fs::write(&tendermint_wrapper_elf_path, WRAPPER_ELF_TENDERMINT).context(format!(
+            "Failed to dump wrapper ELF to {}",
+            tendermint_wrapper_elf_path.display()
+        ))?;
 
         println!("ELFs dumped successfully");
         return Ok(());
