@@ -78,15 +78,30 @@ pub async fn run_prover_loop(
         println!("[Prover Loop] Step 1/7");
         let recursive_prover = match MODE.as_str() {
             "HELIOS" => {
-                helios_prover(
+                match helios_prover(
                     &helios_elf,
                     recursive_vk.bytes32(),
                     &service_state,
                     &consensus_url,
                 )
-                .await?
+                .await
+                {
+                    Ok(prover) => prover,
+                    Err(e) => {
+                        println!("[Error] Helios prover failed: {}", e);
+                        tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                        continue;
+                    }
+                }
             }
-            "TENDERMINT" => tendermint_prover(&service_state, recursive_vk.bytes32()).await?,
+            "TENDERMINT" => match tendermint_prover(&service_state, recursive_vk.bytes32()).await {
+                Ok(prover) => prover,
+                Err(e) => {
+                    println!("[Error] Tendermint prover failed: {}", e);
+                    tokio::time::sleep(Duration::from_secs(DEFAULT_TIMEOUT)).await;
+                    continue;
+                }
+            },
             _ => panic!("Invalid mode: {:?}", MODE.as_str()),
         };
         println!("[Prover Loop] Running recursive prover");
