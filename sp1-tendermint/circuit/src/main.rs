@@ -12,7 +12,10 @@ sp1_zkvm::entrypoint!(main);
 // The trusted slot number from which we start our light client chain.
 // This must be a slot where we have verified the sync committee hash.
 const TRUSTED_HEIGHT: u64 = 31134400;
-const TRUSTED_ROOT: [u8; 32] = [133, 197, 217, 208, 182, 161, 40, 102, 214, 74, 216, 44, 87, 164, 134, 95, 150, 222, 115, 170, 222, 9, 183, 138, 57, 107, 86, 21, 40, 96, 131, 113];
+const TRUSTED_ROOT: [u8; 32] = [
+    133, 197, 217, 208, 182, 161, 40, 102, 214, 74, 216, 44, 87, 164, 134, 95, 150, 222, 115, 170,
+    222, 9, 183, 138, 57, 107, 86, 21, 40, 96, 131, 113,
+];
 const TENDERMINT_VK: &str = "0x00be33671b715fb3f8657ae631b2a7032e2ecda1fc598d18ac234f87ba2a8fd5";
 
 pub fn main() {

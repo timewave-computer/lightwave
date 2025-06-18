@@ -61,7 +61,7 @@ const TENDERMINT_TRUSTED_ROOT: [u8; 32] = [
 /// 1. Initializes the service state with a trusted slot
 /// 2. Sets up the prover client and circuit artifacts
 /// 3. Enters a loop that:
-///    - Generates Helios proofs for new blocks
+///    - Generates proofs for new blocks (Helios or Tendermint depending on mode)
 ///    - Verifies proofs recursively
 ///    - Updates the service state with new trusted information
 ///    - Commits execution block height and state root instead of beacon header
