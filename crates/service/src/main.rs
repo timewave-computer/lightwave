@@ -45,8 +45,8 @@ struct Args {
 }
 
 // Binary artifacts for the various circuits used in the light client
-pub const HELIOS_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-helios-elf");
-pub const TENDERMINT_ELF: &[u8] = include_bytes!("../../elfs/constant/sp1-tendermint-elf");
+pub const HELIOS_ELF: &[u8] = include_bytes!("../../../elfs/constant/sp1-helios-elf");
+pub const TENDERMINT_ELF: &[u8] = include_bytes!("../../../elfs/constant/sp1-tendermint-elf");
 pub const RECURSIVE_ELF_HELIOS: &[u8] = include_elf!("helios-recursion-circuit");
 pub const WRAPPER_ELF_HELIOS: &[u8] = include_elf!("helios-wrapper-circuit");
 pub const RECURSIVE_ELF_TENDERMINT: &[u8] = include_elf!("tendermint-recursion-circuit");
@@ -139,7 +139,7 @@ async fn main() -> Result<()> {
             .to_vec();
 
         let committee_hash_formatted = format!("{:?}", trusted_committee_hash);
-        let template = include_str!("../../sp1-helios/circuit/src/blueprint.rs");
+        let template = include_str!("../../integrations/sp1-helios/circuit/src/blueprint.rs");
 
         // Generate the Helios recursive circuit
         let (_, helios_vk) = client.setup(HELIOS_ELF);
@@ -147,11 +147,14 @@ async fn main() -> Result<()> {
             .replace("{ committee_hash }", &committee_hash_formatted)
             .replace("{ trusted_head }", &HELIOS_TRUSTED_SLOT.to_string())
             .replace("{ helios_vk }", &helios_vk.bytes32());
-        write("sp1-helios/circuit/src/main.rs", generated_code)
-            .context("Failed to generate recursive circuit from blueprint")?;
+        write(
+            "crates/integrations/sp1-helios/circuit/src/main.rs",
+            generated_code,
+        )
+        .context("Failed to generate recursive circuit from blueprint")?;
 
         // Generate the Tendermint recursive circuit
-        let template = include_str!("../../sp1-tendermint/circuit/src/blueprint.rs");
+        let template = include_str!("../../integrations/sp1-tendermint/circuit/src/blueprint.rs");
         let (_, tendermint_vk) = client.setup(TENDERMINT_ELF);
         let generated_code = template
             .replace("{ trusted_height }", &TENDERMINT_TRUSTED_HEIGHT.to_string())
@@ -160,8 +163,11 @@ async fn main() -> Result<()> {
                 &format!("{:?}", TENDERMINT_TRUSTED_ROOT),
             )
             .replace("{ tendermint_vk }", &tendermint_vk.bytes32());
-        write("sp1-tendermint/circuit/src/main.rs", generated_code)
-            .context("Failed to generate recursive circuit from blueprint")?;
+        write(
+            "crates/integrations/sp1-tendermint/circuit/src/main.rs",
+            generated_code,
+        )
+        .context("Failed to generate recursive circuit from blueprint")?;
 
         tracing::info!("Recursive circuit generated successfully");
         return Ok(());
@@ -176,21 +182,29 @@ async fn main() -> Result<()> {
         let (_, tendermint_vk) = client.setup(RECURSIVE_ELF_TENDERMINT);
         let tendermint_vk_bytes = tendermint_vk.bytes32();
 
-        let template = include_str!("../../sp1-helios/wrapper-circuit/src/blueprint.rs");
+        let template =
+            include_str!("../../integrations/sp1-helios/wrapper-circuit/src/blueprint.rs");
         let generated_code =
             template.replace("{ recursive_vk }", &format!("{:?}", helios_vk_bytes));
 
         // Generate the Helios wrapper circuit
-        write("sp1-helios/wrapper-circuit/src/main.rs", generated_code)
-            .context("Failed to generate wrapper circuit from blueprint")?;
+        write(
+            "crates/integrations/sp1-helios/wrapper-circuit/src/main.rs",
+            generated_code,
+        )
+        .context("Failed to generate wrapper circuit from blueprint")?;
 
-        let template = include_str!("../../sp1-tendermint/wrapper-circuit/src/blueprint.rs");
+        let template =
+            include_str!("../../integrations/sp1-tendermint/wrapper-circuit/src/blueprint.rs");
 
         // Generate the Tendermint wrapper circuit
         let generated_code =
             template.replace("{ recursive_vk }", &format!("{:?}", tendermint_vk_bytes));
-        write("sp1-tendermint/wrapper-circuit/src/main.rs", generated_code)
-            .context("Failed to generate wrapper circuit from blueprint")?;
+        write(
+            "crates/integrations/sp1-tendermint/wrapper-circuit/src/main.rs",
+            generated_code,
+        )
+        .context("Failed to generate wrapper circuit from blueprint")?;
 
         tracing::info!("Wrapper circuit generated successfully");
         return Ok(());

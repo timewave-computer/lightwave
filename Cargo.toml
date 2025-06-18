@@ -1,12 +1,12 @@
 [workspace]
 members = [
-    "sp1-helios/circuit",
-    "sp1-helios/recursion-types",
-    "sp1-helios/wrapper-circuit",
-    "sp1-tendermint/circuit",
-    "sp1-tendermint/recursion-types",
-    "sp1-tendermint/wrapper-circuit",
-    "service",
+    "crates/integrations/sp1-helios/circuit",
+    "crates/integrations/sp1-helios/recursion-types",
+    "crates/integrations/sp1-helios/wrapper-circuit",
+    "crates/integrations/sp1-tendermint/circuit",
+    "crates/integrations/sp1-tendermint/recursion-types",
+    "crates/integrations/sp1-tendermint/wrapper-circuit",
+    "crates/service",
 ]
 resolver = "2"
 
@@ -50,11 +50,11 @@ helios-operator = { package = "sp1-helios-script", git = "https://github.com/suc
 helios-consensus-core = { git = "https://github.com/a16z/helios", tag = "0.8.6" }
 helios-ethereum = { git = "https://github.com/a16z/helios", tag = "0.8.6" }
 sp1-helios-primitives = { package = "sp1-helios-primitives", git = "https://github.com/succinctlabs/sp1-helios", rev = "c9e81c8e48dec1e65e2de9fac6aed3a2cda6911e" }
-helios-recursion-types = { path = "sp1-helios/recursion-types" }
-beacon-electra = { path = "beacon-electra" }
+helios-recursion-types = { path = "crates/integrations/sp1-helios/recursion-types" }
+beacon-electra = { path = "crates/beacon-electra" }
 
 # tendermint only
-tendermint-recursion-types = { path = "sp1-tendermint/recursion-types" }
+tendermint-recursion-types = { path = "crates/integrations/sp1-tendermint/recursion-types" }
 sp1-tendermint-primitives = { package = "program-types", git = "https://github.com/timewave-computer/sp1-tendermint", branch = "valence-compat" }
 tendermint-prover = { package = "tendermint-operator", git = "https://github.com/timewave-computer/sp1-tendermint", branch = "valence-compat" }
 

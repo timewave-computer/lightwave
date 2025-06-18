@@ -4,12 +4,12 @@
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
-use helios_recursion_types::{
+use sp1_verifier::Groth16Verifier;
+use tendermint_recursion_types::{
     RecursionCircuitOutputs, WrapperCircuitInputs, WrapperCircuitOutputs,
 };
-use sp1_verifier::Groth16Verifier;
 
-const RECURSIVE_VK: &str = "0x00c92bdd62cde9c796be4ab413bf21144e02017b27bc1330a2eb0f6c0ccc6dc2";
+const RECURSIVE_VK: &str = "0x007233d84afece20b8bb52baf8d0eeaa471956b609de542144fcf8ae0364affa";
 
 fn main() {
     // Get the Groth16 verification key for proof verification
@@ -32,7 +32,7 @@ fn main() {
 
     // Verify the recursive proof using Groth16 verification
     Groth16Verifier::verify(
-        inputs.recursive_proof.as_ref(),
+        &inputs.recursive_proof,
         &public_outputs,
         // todo: hardcode this verifying key (must be the Recursive circuit VK)
         RECURSIVE_VK,

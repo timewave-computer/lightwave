@@ -7,8 +7,8 @@ A ZK light client service that supports both Ethereum (via Helios) and Tendermin
 
 ## Documentation
 
-- [Helios Documentation](docs/HELIOS.md) - Documentation for the Ethereum light client implementation
-- [Tendermint Documentation](docs/TENDERMINT.md) - Documentation for the Tendermint light client implementation
+- [Helios Documentation](docs/integrations/HELIOS.md) - Documentation for the Ethereum light client implementation
+- [Tendermint Documentation](docs/integrations/TENDERMINT.md) - Documentation for the Tendermint light client implementation
 
 ## Features
 
@@ -25,7 +25,10 @@ A ZK light client service that supports both Ethereum (via Helios) and Tendermin
 2. Follow the initialization instructions in the respective documentation:
    - [Helios Initialization](docs/HELIOS.md#re-initialization)
    - [Tendermint Initialization](docs/TENDERMINT.md#re-initialization)
-3. Start the service using `make run`
+3. Specify the trusted checkpoint for your chosen light client in `crates/service/src/checkpoints.rs`:
+   - For Helios: Update `HELIOS_TRUSTED_SLOT` with the desired slot number
+   - For Tendermint: Update `TENDERMINT_TRUSTED_HEIGHT` and `TENDERMINT_TRUSTED_ROOT` with the desired height and root hash
+4. Start the service using `make run`
 
 ## Architecture
 

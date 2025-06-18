@@ -90,12 +90,12 @@ pub async fn run_prover_loop(
         tracing::info!(
             proof_type = "recursive",
             vk = %recursive_vk.bytes32(),
-            "Proof verification key generated"
+            "Verification key"
         );
         tracing::info!(
             proof_type = "wrapper",
             vk = %wrapper_vk.bytes32(),
-            "Proof verification key generated"
+            "Verification key"
         );
 
         // Generate base proof based on selected mode
