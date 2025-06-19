@@ -1,0 +1,18 @@
+{
+    "rust-analyzer.overrides": [
+        {
+            "filter": {
+                "path": "service" // relative path to the "service" crate
+            },
+            "settings": {
+                "cargo": {
+                    "features": [
+                        "helios",
+                        "tendermint"
+                    ],
+                    "noDefaultFeatures": true
+                }
+            }
+        }
+    ]
+}

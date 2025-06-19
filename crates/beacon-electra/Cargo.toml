@@ -1,0 +1,33 @@
+[package]
+name = "beacon-electra"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+borsh.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+itertools.workspace = true
+sha2.workspace = true
+anyhow.workspace = true
+
+consensus-types = { package = "types", git = "https://github.com/sigp/lighthouse", rev = "999b04517e35f8fce78525132d0b8e0a4816f31e", optional = true }
+tree_hash = { version = "0.8", optional = true }
+tree_hash_derive = { version = "0.8", optional = true }
+lazy_static = { version = "1.5.0", optional = true }
+reqwest = { workspace = true, features = ["json"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.44.2", default-features = false, features = [
+    "macros",
+    "rt",
+] }
+
+[features]
+no-zkvm = [
+    "dep:consensus-types",
+    "dep:tree_hash",
+    "dep:tree_hash_derive",
+    "dep:lazy_static",
+    "dep:reqwest",
+]
