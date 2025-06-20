@@ -134,7 +134,14 @@ fn get_helios_outputs(
             .try_into()
             .expect("Failed to unwrap recursive proof outputs"),
         root: state_root.to_vec().try_into().unwrap(),
-        height: ssz_rs::deserialize::<u64>(height).expect("Failed to deserialize block number"),
+        height: unpad_block_number(height),
         vk: recursive_proof_inputs.recursive_vk.clone(),
     }
+}
+
+// the block height leaf in the merkle tree was padded to 32 bytes, so we need to unpad it
+fn unpad_block_number(padded: &[u8; 32]) -> u64 {
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&padded[..8]);
+    u64::from_le_bytes(bytes)
 }

@@ -11,4 +11,3 @@ helios-recursion-types.workspace = true
 alloy-sol-types.workspace = true
 sp1-helios-primitives.workspace = true
 beacon-electra.workspace = true
-ssz_rs = "0.9.0"
