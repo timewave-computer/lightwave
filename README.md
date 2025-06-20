@@ -39,10 +39,6 @@ The service consists of several key components:
 - **Recursion Circuit**: Verifies light client proofs and maintains proof chain
 - **Wrapper Circuit**: Verifies recursive proofs and commits outputs
 
-For detailed architecture information, see:
-- [Helios Architecture](docs/HELIOS.md#system-architecture)
-- [Tendermint Architecture](docs/TENDERMINT.md#system-architecture)
-
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 
