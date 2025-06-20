@@ -116,12 +116,17 @@ fn get_helios_outputs(
         let recursive_proof_outputs =
             recursive_proof_outputs.expect("Failed to unwrap recursive proof outputs");
 
+        // if the new head is for a new perid, the previous committee hash must match
+        // the active committee hash of the previous proof
         if helios_output.prevHead % U256::from(8192) < helios_output.newHead % U256::from(8192) {
             if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
                 panic!("Sync committee mismatch!");
             }
         }
 
+        // if the new head is for a new period, the previous committee hash must match
+        // the previous committee hash of the previous proof
+        // e.g. they should have the same previous committee hash for the same period
         if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
             panic!("Sync committee mismatch!");
         }
