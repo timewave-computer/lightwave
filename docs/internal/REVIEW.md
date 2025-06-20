@@ -36,7 +36,7 @@ Currently all circuits are automatically generated when running `make build-circ
 `make build-circuits` should only be run once and then the ELF (VK, PK) should be distributed.
 If `make build-circuits` is run on another machine, or after the circuit code has been modified, then it will produce a new ELF file that will not match the previously generated one -> this can lead to the generation of invalid proofs using the new PK against the initial VK.
 
->![NOTE]
+> [!WARNING]
 > An ELF contains a pair of proving key, verifying key that
 > is fully deterministic and unique for the circuit and machine
 > that it was compiled on.
@@ -50,6 +50,10 @@ to ensure no mistakes are made.
 
 The codebase currently is fully functional for Tendermint and Helios, it's just a matter of
 improving the dependency resolution.
+
+### Allow users to specify hex values of trusted root
+Currently `checkpoints.rs` defines the bytes as [u8;32], from the next release tag on this
+will be the hex encoded string.
 
 
 ## Necessary Workarounds
