@@ -4,7 +4,6 @@
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
-use alloy_primitives::U256;
 use alloy_sol_types::SolValue;
 use beacon_electra::merkleize_header;
 use helios_recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
@@ -115,14 +114,9 @@ fn get_helios_outputs(
     if recursive_proof_outputs.is_some() {
         let recursive_proof_outputs =
             recursive_proof_outputs.expect("Failed to unwrap recursive proof outputs");
-
-        if helios_output.prevHead % U256::from(8192) < helios_output.newHead % U256::from(8192) {
-            if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
-                panic!("Sync committee mismatch!");
-            }
-        }
-
-        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
+        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee
+            && helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee
+        {
             panic!("Sync committee mismatch!");
         }
     }
@@ -140,7 +134,14 @@ fn get_helios_outputs(
             .try_into()
             .expect("Failed to unwrap recursive proof outputs"),
         root: state_root.to_vec().try_into().unwrap(),
-        height: ssz_rs::deserialize::<u64>(height).expect("Failed to deserialize block number"),
+        height: unpad_block_number(height),
         vk: recursive_proof_inputs.recursive_vk.clone(),
     }
+}
+
+// the block height leaf in the merkle tree was padded to 32 bytes, so we need to unpad it
+fn unpad_block_number(padded: &[u8; 32]) -> u64 {
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&padded[..8]);
+    u64::from_le_bytes(bytes)
 }
