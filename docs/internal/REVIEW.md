@@ -43,8 +43,8 @@ If `make build-circuits` is run on another machine, or after the circuit code ha
 
 ## Work in progress (post release 1.0.0)
 
-### Feature gating dependencies
-Currently we pull in all deps for Helios and Tendermint no matter which light client is selected. Feature-gating the dependencies is work in progress and will be part of the next
+### Feature gateing dependencies
+Currently we pull in all deps for Helios and Tendermint no matter which light client is selected. Feature-gateing the dependencies is work in progress and will be part of the next
 tagged release. The reason why this isn't done yet is because it requires continuous testing
 to ensure no mistakes are made.
 
