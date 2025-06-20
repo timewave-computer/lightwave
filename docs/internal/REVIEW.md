@@ -28,7 +28,8 @@ located in `crates/service/preprocessor/*`.
 The Preprocessor prepares data such as the signed light client updates in range and
 the most recent finalized header. The `get_updates` function is mostly copied from 
 `SP1-Helios`, but we are using exact period range instead of a MAX value, because 
-the Lodestar API expects an exact update range. This is tested and ran without issues for 2+ weeks.
+the Lodestar API endpoint will return an error if we request an update for a value
+that is out of bounds. This is tested and ran without issues for 2+ weeks.
 
 ### Automated circuit generation from checkpoints.rs
 Currently all circuits are automatically generated when running `make build-circuits`, filling in the constants specified in `crates/service/src/checkpoints.rs` into the `blueprint.rs` of each circuit (see for example `crates/integrations/sp1-helios/circuit/src/blueprint.rs`) for the recursive circuit of the Helios prover, or `crates/integrations/sp1-helios/wrapper-circuit/src/blueprint.rs` for the wrapper circuit of the Helios prover.
@@ -43,8 +44,8 @@ If `make build-circuits` is run on another machine, or after the circuit code ha
 
 ## Work in progress (post release 1.0.0)
 
-### Feature gating dependencies
-Currently we pull in all deps for Helios and Tendermint no matter which light client is selected. Feature-gating the dependencies is work in progress and will be part of the next
+### Feature gateing dependencies
+Currently we pull in all deps for Helios and Tendermint no matter which light client is selected. Feature-gateing the dependencies is work in progress and will be part of the next
 tagged release. The reason why this isn't done yet is because it requires continuous testing
 to ensure no mistakes are made.
 
