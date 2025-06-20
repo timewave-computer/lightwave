@@ -13,10 +13,7 @@ use sp1_verifier::Groth16Verifier;
 
 // The trusted sync committee hash that was active at the trusted slot.
 // This is used to verify the initial state when starting from the trusted slot.
-const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [
-    42, 127, 126, 117, 72, 179, 28, 141, 55, 33, 177, 213, 151, 94, 45, 208, 226, 255, 98, 136,
-    212, 174, 252, 91, 254, 248, 107, 95, 40, 53, 223, 67,
-];
+const TRUSTED_SYNC_COMMITTEE_HASH: [u8; 32] = [42, 127, 126, 117, 72, 179, 28, 141, 55, 33, 177, 213, 151, 94, 45, 208, 226, 255, 98, 136, 212, 174, 252, 91, 254, 248, 107, 95, 40, 53, 223, 67];
 
 // The trusted slot number from which we start our light client chain.
 // This must be a slot where we have verified the sync committee hash.
@@ -119,12 +116,17 @@ fn get_helios_outputs(
         let recursive_proof_outputs =
             recursive_proof_outputs.expect("Failed to unwrap recursive proof outputs");
 
+        // if the new head is for a new perid, the previous committee hash must match
+        // the active committee hash of the previous proof
         if helios_output.prevHead % U256::from(8192) < helios_output.newHead % U256::from(8192) {
             if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
                 panic!("Sync committee mismatch!");
             }
         }
 
+        // if the new head is for a new period, the previous committee hash must match
+        // the previous committee hash of the previous proof
+        // e.g. they should have the same previous committee hash for the same period
         if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
             panic!("Sync committee mismatch!");
         }
