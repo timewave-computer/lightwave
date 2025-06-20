@@ -76,7 +76,3 @@ The service consists of several key components:
 - **Preprocessor**: Prepares inputs for the light client programs
 - **Recursion Circuit**: Verifies light client proofs and maintains proof chain
 - **Wrapper Circuit**: Verifies recursive proofs and commits outputs
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
