@@ -117,12 +117,12 @@ fn get_helios_outputs(
             recursive_proof_outputs.expect("Failed to unwrap recursive proof outputs");
 
         if helios_output.prevHead % U256::from(8192) < helios_output.newHead % U256::from(8192) {
-            if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
+            if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
                 panic!("Sync committee mismatch!");
             }
         }
 
-        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
+        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
             panic!("Sync committee mismatch!");
         }
     }
