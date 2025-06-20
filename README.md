@@ -2,9 +2,6 @@
 
 An extensible, recursive, ZK light client operator service that currently supports both Ethereum (via Helios) and Tendermint chains. This service generates and verifies zero-knowledge proofs of light client state transitions, enabling trustless verification of blockchain state.
 
-## Todos
-- Feature gate Light Client specific deps
-
 ## Documentation
 
 - [Helios Documentation](docs/integrations/HELIOS.md) - Documentation for the Ethereum light client implementation
