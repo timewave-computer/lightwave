@@ -9,7 +9,7 @@ use tendermint_recursion_types::{
     RecursionCircuitOutputs, WrapperCircuitInputs, WrapperCircuitOutputs,
 };
 
-const RECURSIVE_VK: &str = "0x001ce5aa1ec0efba893c9809c026b81ff559b542bc68898c695e78741a6ee355";
+const RECURSIVE_VK: &str = "0x009094b993417fd795f3785e430cc9153705f79c798ac8f337acfabad95d4edc";
 
 fn main() {
     // Get the Groth16 verification key for proof verification

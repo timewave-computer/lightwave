@@ -116,6 +116,9 @@ fn get_helios_outputs(
         let recursive_proof_outputs =
             recursive_proof_outputs.expect("Failed to unwrap recursive proof outputs");
 
+        // the new head must be greater than the previous head
+        assert!(helios_output.prevHead < helios_output.newHead);
+
         // if the new head is for a new perid, the previous committee hash must match
         // the active committee hash of the previous proof
         if helios_output.prevHead % U256::from(8192) < helios_output.newHead % U256::from(8192) {
