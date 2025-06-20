@@ -4,6 +4,7 @@
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
+use alloy_primitives::U256;
 use alloy_sol_types::SolValue;
 use beacon_electra::merkleize_header;
 use helios_recursion_types::{RecursionCircuitInputs, RecursionCircuitOutputs};
@@ -114,9 +115,14 @@ fn get_helios_outputs(
     if recursive_proof_outputs.is_some() {
         let recursive_proof_outputs =
             recursive_proof_outputs.expect("Failed to unwrap recursive proof outputs");
-        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee
-            && helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee
-        {
+
+        if helios_output.prevHead % U256::from(8192) < helios_output.newHead % U256::from(8192) {
+            if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
+                panic!("Sync committee mismatch!");
+            }
+        }
+
+        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
             panic!("Sync committee mismatch!");
         }
     }
