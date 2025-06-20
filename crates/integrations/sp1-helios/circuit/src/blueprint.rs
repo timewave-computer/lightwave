@@ -103,14 +103,6 @@ pub fn main() {
     }
 }
 
-// Helper function to convert the padded block number from SSZ format to a u64
-// SSZ uses little-endian for uint64 and pads to 32 bytes
-fn unpad_block_number(padded: &[u8; 32]) -> u64 {
-    let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(&padded[..8]); // SSZ uses little-endian for uint64
-    u64::from_le_bytes(bytes)
-}
-
 fn get_helios_outputs(
     helios_output: HeliosOutputs,
     recursive_proof_outputs: Option<RecursionCircuitOutputs>,
@@ -125,9 +117,7 @@ fn get_helios_outputs(
         if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee
             && helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee
         {
-            panic!(
-                "[Warning] Sync committee mismatch, we might be at a boundary. Wait for 70 minutes and if this issue does not resolve itself, then there is a bug in the circuit!"
-            );
+            panic!("Sync committee mismatch!");
         }
     }
 
@@ -144,7 +134,7 @@ fn get_helios_outputs(
             .try_into()
             .expect("Failed to unwrap recursive proof outputs"),
         root: state_root.to_vec().try_into().unwrap(),
-        height: unpad_block_number(&height),
+        height: ssz_rs::deserialize::<u64>(height).expect("Failed to deserialize block number"),
         vk: recursive_proof_inputs.recursive_vk.clone(),
     }
 }
