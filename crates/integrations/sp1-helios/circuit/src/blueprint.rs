@@ -119,19 +119,8 @@ fn get_helios_outputs(
         // the new head must be greater than the previous head
         assert!(helios_output.prevHead < helios_output.newHead);
 
-        // if the new head is for a new perid, the previous committee hash must match
-        // the active committee hash of the previous proof
-        if helios_output.prevHead / U256::from(8192) < helios_output.newHead / U256::from(8192) {
-            if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
-                panic!("Sync committee mismatch!");
-            }
-        } else {
-            // if the new head is for the same period, the previous committee hash must match
-            // the previous committee hash of the previous proof
-            // e.g. they should have the same previous committee hash for the same period
-            if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
-                panic!("Sync committee mismatch!");
-            }
+        if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
+            panic!("Sync committee mismatch!");
         }
     }
 
