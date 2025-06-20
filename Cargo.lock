@@ -3367,6 +3367,7 @@ dependencies = [
 name = "helios-recursion-circuit"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives 0.8.25",
  "alloy-sol-types 0.8.25",
  "beacon-electra",
  "borsh",
