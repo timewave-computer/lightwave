@@ -23,8 +23,8 @@ An extensible, recursive, ZK light client operator service that currently suppor
 
 1. Set the environment variable `CLIENT_BACKEND` to either `"HELIOS"` or `"TENDERMINT"` to choose which light client to use
 2. Follow the initialization instructions in the respective documentation:
-   - [Helios Initialization](docs/HELIOS.md#re-initialization)
-   - [Tendermint Initialization](docs/TENDERMINT.md#re-initialization)
+   - [Helios Initialization](docs/integrations/HELIOS.md#re-initialization)
+   - [Tendermint Initialization](docs/integrations/TENDERMINT.md#re-initialization)
 3. Specify the trusted checkpoint for your chosen light client in `crates/service/src/checkpoints.rs`:
    - For Helios: Update `HELIOS_TRUSTED_SLOT` with the desired slot number
    - For Tendermint: Update `TENDERMINT_TRUSTED_HEIGHT` and `TENDERMINT_TRUSTED_ROOT` with the desired height and root hash
