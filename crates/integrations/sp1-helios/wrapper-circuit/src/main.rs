@@ -9,7 +9,7 @@ use helios_recursion_types::{
 };
 use sp1_verifier::Groth16Verifier;
 
-const RECURSIVE_VK: &str = "0x00ce4b3dca6f0078b14514bda53730ac4a72fe54696cfee2f9e546f02061aade";
+const RECURSIVE_VK: &str = "0x00874b6aaa32bca7c478176c9c8c256f998b0900855a58bac339f6924577c675";
 
 fn main() {
     // Get the Groth16 verification key for proof verification

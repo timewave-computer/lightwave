@@ -123,12 +123,36 @@ fn get_helios_outputs(
         // the previous committee hash of the previous proof
         if helios_output.prevHead / U256::from(8192) < helios_output.newHead / U256::from(8192) {
             if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.previous_committee {
+                println!(
+                    "new proof previous committee: {:?}",
+                    helios_output.prevSyncCommitteeHash
+                );
+                println!(
+                    "previous proof previous committee: {:?}",
+                    recursive_proof_outputs.previous_committee
+                );
+                println!(
+                    "active committee: {:?}",
+                    recursive_proof_outputs.active_committee
+                );
                 panic!("Sync committee mismatch!");
             }
         } else {
             // if the new head is for the same period, the previous committee hash must match
             // the active committee hash of the previous proof
             if helios_output.prevSyncCommitteeHash != recursive_proof_outputs.active_committee {
+                println!(
+                    "new proof previous committee: {:?}",
+                    helios_output.prevSyncCommitteeHash
+                );
+                println!(
+                    "previous proof previous committee: {:?}",
+                    recursive_proof_outputs.previous_committee
+                );
+                println!(
+                    "active committee: {:?}",
+                    recursive_proof_outputs.active_committee
+                );
                 panic!("Sync committee mismatch!");
             }
         }
