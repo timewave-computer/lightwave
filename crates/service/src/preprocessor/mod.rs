@@ -46,7 +46,7 @@ impl Preprocessor {
         let latest_slot = gest_latest_slot().await?;
         // we only get a finality update every 32 slots, so we need to wait for the
         // latest finalized slot to be at least 32 slots ahead of the trusted slot
-        if latest_slot <= self.trusted_slot || latest_slot / 32 > self.trusted_slot / 32 {
+        if latest_slot <= self.trusted_slot || latest_slot / 32 < self.trusted_slot / 32 {
             return Err(anyhow::anyhow!(
                 "Waiting for new slot to be finalized, retry in 60 seconds!"
             ));
