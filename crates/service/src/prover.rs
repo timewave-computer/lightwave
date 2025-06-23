@@ -75,6 +75,8 @@ pub async fn run_prover_loop(
     tracing::info!("🚀 Starting proof generation service loop...");
 
     loop {
+        let round_start_time = Instant::now();
+
         // Clean up any existing GPU containers
         tracing::info!("🧹 Cleaning up GPU containers...");
         cleanup_gpu_containers()?;
@@ -281,6 +283,9 @@ pub async fn run_prover_loop(
             service_state.trusted_slot,
             service_state.trusted_height
         );
+
+        let round_duration = round_start_time.elapsed();
+        tracing::info!("⏱️  Round completed in: {:?}", round_duration);
         tracing::info!("⏱️  Service uptime: {:?}", start_time.elapsed());
     }
 }

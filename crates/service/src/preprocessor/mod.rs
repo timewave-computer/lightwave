@@ -43,18 +43,20 @@ impl Preprocessor {
         let checkpoint = get_checkpoint(self.trusted_slot).await?;
         let client = get_client(checkpoint).await?;
         let trusted_slot_period = &self.trusted_slot / 8192;
-        let latest_finalized_slot = get_latest_finalized_slot().await?;
+        let latest_slot = gest_latest_slot().await?;
         // we only get a finality update every 32 slots, so we need to wait for the
         // latest finalized slot to be at least 32 slots ahead of the trusted slot
-        info!(
-            "latest_finalized_slot: {}, trusted_slot: {}",
-            latest_finalized_slot, self.trusted_slot
-        );
-        if latest_finalized_slot <= self.trusted_slot || latest_finalized_slot % 32 != 0 {
+        if latest_slot <= self.trusted_slot || latest_slot / 32 < self.trusted_slot / 32 {
             return Err(anyhow::anyhow!(
                 "Waiting for new slot to be finalized, retry in 60 seconds!"
             ));
         }
+
+        let latest_finalized_slot = latest_slot - (latest_slot % 32);
+        info!(
+            "latest_finalized_slot: {}, trusted_slot: {}",
+            latest_finalized_slot, self.trusted_slot
+        );
         let latest_finalized_slot_period = latest_finalized_slot / 8192;
         let mut period_distance = latest_finalized_slot_period - trusted_slot_period;
         if period_distance == 0 {
@@ -87,7 +89,7 @@ impl Preprocessor {
 ///
 /// This function makes an RPC call to the consensus client to get
 /// the most recently finalized slot number.
-pub async fn get_latest_finalized_slot() -> Result<u64> {
+pub async fn gest_latest_slot() -> Result<u64> {
     let consensus_url = env::var("SOURCE_CONSENSUS_RPC_URL")?;
     let resp: Value = reqwest::get(format!("{}/eth/v1/beacon/headers/finalized", consensus_url))
         .await?

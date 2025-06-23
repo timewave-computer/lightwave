@@ -38,6 +38,14 @@ pub fn main() {
     if inputs.trusted_height == TRUSTED_HEIGHT {
         assert_eq!(tendermintx_output.trusted_header_hash, TRUSTED_ROOT);
     } else {
+        let recusive_proof_outputs: RecursionCircuitOutputs = borsh::from_slice(
+            &inputs
+                .recursive_public_values
+                .as_ref()
+                .expect("Failed to unwrap recursive public values"),
+        )
+        .expect("Failed to deserialize Recursive Outputs");
+        assert!(tendermintx_output.target_height > recusive_proof_outputs.height);
         Groth16Verifier::verify(
             &inputs
                 .recursive_proof
